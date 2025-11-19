@@ -1,0 +1,274 @@
+<template>
+  <v-container>
+    <v-row>
+      <v-col cols="12">
+        <h1 class="text-h4 mb-4 font-weight-bold text-primary">
+          <v-icon start>mdi-account-edit</v-icon>
+          ประเมินตนเอง (Self-Assessment)
+        </h1>
+      </v-col>
+    </v-row>
+
+    <v-card class="mb-6 elevation-2">
+      <v-card-text>
+        <v-select
+          v-model="selectedRoundId"
+          :items="rounds"
+          item-title="round_name"
+          item-value="id"
+          label="เลือกรอบการประเมิน"
+          variant="outlined"
+          prepend-inner-icon="mdi-calendar-range"
+          hide-details
+          @update:modelValue="fetchCriterias"
+        ></v-select>
+      </v-card-text>
+    </v-card>
+
+    <div v-if="loading" class="text-center py-5">
+      <v-progress-circular indeterminate color="primary" size="64"></v-progress-circular>
+      <div class="mt-3">กำลังโหลดข้อมูลเกณฑ์...</div>
+    </div>
+
+    <div v-else-if="selectedRoundId && criterias.length > 0">
+      <v-expansion-panels variant="popout" class="mb-6">
+        <v-expansion-panel
+          v-for="(criteria, index) in criterias"
+          :key="criteria.id"
+          elevation="2"
+        >
+          <v-expansion-panel-title>
+            <v-row no-gutters align="center">
+              <v-col cols="8">
+                <div class="font-weight-bold text-subtitle-1">
+                  {{ index + 1 }}. {{ criteria.topic_name }}
+                </div>
+                <div class="text-caption text-grey">
+                  {{ criteria.indicator_name }}
+                </div>
+              </v-col>
+              <v-col cols="4" class="text-right text-caption text-primary">
+                (คะแนนเต็ม: {{ criteria.max_score }})
+                <v-icon v-if="criteria.isSubmitted" color="success" class="ml-2">
+                  mdi-check-circle
+                </v-icon>
+              </v-col>
+            </v-row>
+          </v-expansion-panel-title>
+
+          <v-expansion-panel-text>
+            <v-divider class="mb-4"></v-divider>
+            <v-form @submit.prevent="submitItem(criteria)">
+              <v-row>
+                <v-col cols="12" md="6">
+                  <v-label class="mb-2 font-weight-bold">คะแนนประเมินตนเอง</v-label>
+                  <div v-if="criteria.scoring_type === 'scale'">
+                    <v-radio-group v-model="formModels[criteria.id].score" inline>
+                      <v-radio label="1 (ต่ำมาก)" :value="1"></v-radio>
+                      <v-radio label="2 (ต่ำ)" :value="2"></v-radio>
+                      <v-radio label="3 (ตามเกณฑ์)" :value="3"></v-radio>
+                      <v-radio label="4 (สูงกว่า)" :value="4"></v-radio>
+                    </v-radio-group>
+                  </div>
+                  <div v-else>
+                    <v-switch
+                      v-model="formModels[criteria.id].score"
+                      :label="formModels[criteria.id].score ? 'มี (ผ่าน)' : 'ไม่มี (ไม่ผ่าน)'"
+                      :true-value="criteria.max_score"
+                      :false-value="0"
+                      color="success"
+                      hide-details
+                    ></v-switch>
+                  </div>
+                </v-col>
+
+                <v-col cols="12" md="6">
+                  <v-label class="mb-2">ความคิดเห็นเพิ่มเติม / เหตุผลประกอบ</v-label>
+                  <v-textarea
+                    v-model="formModels[criteria.id].comment"
+                    rows="2"
+                    variant="outlined"
+                    placeholder="ระบุเหตุผล..."
+                    density="compact"
+                  ></v-textarea>
+                </v-col>
+              </v-row>
+
+              <v-sheet color="grey-lighten-4" class="pa-4 rounded mb-4">
+                <div class="text-subtitle-2 mb-2">
+                  <v-icon size="small" start>mdi-paperclip</v-icon>
+                  หลักฐานประกอบ (Evidence) [5.2.5]
+                </div>
+                <v-row>
+                  <v-col cols="12" md="6">
+                    <v-file-input
+                      v-model="fileInputs[criteria.id]"
+                      label="แนบไฟล์ (PDF/Image)"
+                      variant="outlined"
+                      density="compact"
+                      prepend-icon=""
+                      prepend-inner-icon="mdi-file-upload"
+                      accept=".pdf,.jpg,.jpeg,.png"
+                      show-size
+                      :hint="formModels[criteria.id].evidence_file ? 'มีไฟล์เดิมอยู่แล้ว' : ''"
+                      persistent-hint
+                    ></v-file-input>
+                  </v-col>
+                  <v-col cols="12" md="6">
+                    <v-text-field
+                      v-model="formModels[criteria.id].evidence_url"
+                      label="ลิงก์หลักฐาน (URL)"
+                      placeholder="https://..."
+                      variant="outlined"
+                      density="compact"
+                      prepend-inner-icon="mdi-link"
+                    ></v-text-field>
+                  </v-col>
+                </v-row>
+              </v-sheet>
+
+              <v-btn
+                type="submit"
+                color="primary"
+                block
+                :loading="loadingIds[criteria.id]"
+              >
+                บันทึกหัวข้อนี้
+              </v-btn>
+            </v-form>
+          </v-expansion-panel-text>
+        </v-expansion-panel>
+      </v-expansion-panels>
+    </div>
+
+    <div v-else-if="selectedRoundId" class="text-center py-5 text-grey">
+      ไม่พบเกณฑ์การประเมินในรอบนี้
+    </div>
+
+    <v-snackbar v-model="snackbar.show" :color="snackbar.color" timeout="3000">
+      {{ snackbar.message }}
+    </v-snackbar>
+  </v-container>
+</template>
+
+<script setup>
+import { ref, reactive, onMounted } from 'vue';
+import api from '../../plugins/axios';
+
+const rounds = ref([]);
+const selectedRoundId = ref(null);
+const criterias = ref([]);
+const loading = ref(false);
+const snackbar = reactive({ show: false, message: '', color: 'success' });
+
+// Store form data per criteria ID
+const formModels = reactive({});
+// Store raw file objects per criteria ID
+const fileInputs = reactive({});
+// Store loading state per criteria ID
+const loadingIds = reactive({});
+
+onMounted(async () => {
+  try {
+    // Fetch Active Rounds
+    const res = await api.get('/admin/rounds');
+    rounds.value = res.data.data.filter(r => r.status === 'open');
+  } catch (error) {
+    console.error(error);
+  }
+});
+
+const fetchCriterias = async () => {
+  if (!selectedRoundId.value) return;
+  
+  loading.value = true;
+  try {
+    // 1. Get Criterias
+    const criRes = await api.get(`/admin/rounds/${selectedRoundId.value}/criterias`);
+    const fetchedCriterias = criRes.data.data;
+
+    // 2. Get Existing Evaluations (To pre-fill data)
+    const evalRes = await api.get(`/user/evaluations/${selectedRoundId.value}`);
+    const myEvals = evalRes.data.data || [];
+
+    // 3. Merge Data
+    criterias.value = fetchedCriterias.map(c => {
+      const existing = myEvals.find(e => e.criteria_id === c.id);
+      
+      // Setup Model for this criteria
+      formModels[c.id] = {
+        score: existing ? Number(existing.score) : 0,
+        comment: existing?.comment || '',
+        evidence_url: existing?.evidence_url || '',
+        evidence_file: existing?.evidence_file || '' // Store path string
+      };
+
+      return {
+        ...c,
+        isSubmitted: !!existing
+      };
+    });
+
+  } catch (error) {
+    console.error(error);
+    snackbar.message = 'โหลดข้อมูลล้มเหลว';
+    snackbar.color = 'error';
+    snackbar.show = true;
+  } finally {
+    loading.value = false;
+  }
+};
+
+const submitItem = async (criteria) => {
+  const cId = criteria.id;
+  loadingIds[cId] = true;
+
+  try {
+    let filePath = formModels[cId].evidence_file;
+
+    // Step 1: Upload File if selected
+    const file = fileInputs[cId]; // Get file from array (Vuetify 3 file input returns array usually, or single obj depending on prop)
+    // Vuetify 3 v-file-input model is an array
+    if (file && file.length > 0) {
+      const formData = new FormData();
+      formData.append('file', file[0]);
+      
+      const uploadRes = await api.post('/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      
+      if (uploadRes.data.status === 'success') {
+        filePath = uploadRes.data.data.path; // Update path
+      }
+    }
+
+    // Step 2: Submit Evaluation Data
+    const payload = {
+      round_id: selectedRoundId.value,
+      criteria_id: cId,
+      score: formModels[cId].score,
+      comment: formModels[cId].comment,
+      evidence_url: formModels[cId].evidence_url,
+      evidence_file: filePath
+    };
+
+    await api.post('/user/evaluate', payload);
+
+    // Update UI state
+    criteria.isSubmitted = true;
+    formModels[cId].evidence_file = filePath; // Keep latest path
+    
+    snackbar.message = 'บันทึกสำเร็จ';
+    snackbar.color = 'success';
+    snackbar.show = true;
+
+  } catch (error) {
+    console.error(error);
+    snackbar.message = error.response?.data?.message || 'เกิดข้อผิดพลาดในการบันทึก';
+    snackbar.color = 'error';
+    snackbar.show = true;
+  } finally {
+    loadingIds[cId] = false;
+  }
+};
+</script>
