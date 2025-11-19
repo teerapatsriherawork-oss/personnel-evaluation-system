@@ -1,6 +1,6 @@
 const db = require('../config/database');
 
-// [5.1.2] CRUD Rounds
+// [5.1.2] CRUD Rounds (จัดการรอบการประเมิน)
 exports.createRound = async (req, res) => {
     try {
         const { round_name, start_date, end_date } = req.body;
@@ -10,6 +10,7 @@ exports.createRound = async (req, res) => {
         );
         res.status(201).json({ status: 'success', message: 'Round created', data: { id: result.insertId } });
     } catch (error) {
+        console.error("Error creating round:", error);
         res.status(500).json({ status: 'error', message: error.message });
     }
 };
@@ -34,16 +35,45 @@ exports.updateRoundStatus = async (req, res) => {
     }
 };
 
-// [5.1.1, 5.1.3] CRUD Criterias
+// [NEW] Topics (จัดการหัวข้อ)
+exports.createTopic = async (req, res) => {
+    try {
+        const { round_id, topic_name } = req.body;
+        // บันทึกลงตาราง topics
+        const [result] = await db.execute(
+            'INSERT INTO topics (round_id, topic_name) VALUES (?, ?)',
+            [round_id, topic_name]
+        );
+        res.status(201).json({ status: 'success', message: 'Topic created', data: { id: result.insertId } });
+    } catch (error) {
+        console.error("Error creating topic:", error);
+        res.status(500).json({ status: 'error', message: error.message });
+    }
+};
+
+exports.getTopicsByRound = async (req, res) => {
+    try {
+        const { roundId } = req.params;
+        const [topics] = await db.execute('SELECT * FROM topics WHERE round_id = ?', [roundId]);
+        res.status(200).json({ status: 'success', data: topics });
+    } catch (error) {
+        res.status(500).json({ status: 'error', message: error.message });
+    }
+};
+
+// [5.1.1, 5.1.3] CRUD Criterias (จัดการตัวชี้วัด)
 exports.createCriteria = async (req, res) => {
     try {
-        const { round_id, topic_name, indicator_name, description, max_score, scoring_type } = req.body;
+        // ต้องรับ topic_id มาจากหน้าบ้าน (ไม่ใช่ topic_name)
+        const { round_id, topic_id, indicator_name, description, max_score, scoring_type } = req.body;
+        
         const [result] = await db.execute(
-            'INSERT INTO criterias (round_id, topic_name, indicator_name, description, max_score, scoring_type) VALUES (?, ?, ?, ?, ?, ?)',
-            [round_id, topic_name, indicator_name, description, max_score, scoring_type]
+            'INSERT INTO criterias (round_id, topic_id, indicator_name, description, max_score, scoring_type) VALUES (?, ?, ?, ?, ?, ?)',
+            [round_id, topic_id, indicator_name, description, max_score, scoring_type]
         );
         res.status(201).json({ status: 'success', message: 'Criteria created', data: { id: result.insertId } });
     } catch (error) {
+        console.error("Error creating criteria:", error); // เพิ่ม Log ให้เห็น Error ชัดๆ
         res.status(500).json({ status: 'error', message: error.message });
     }
 };
@@ -51,7 +81,14 @@ exports.createCriteria = async (req, res) => {
 exports.getCriteriasByRound = async (req, res) => {
     try {
         const { roundId } = req.params;
-        const [criterias] = await db.execute('SELECT * FROM criterias WHERE round_id = ?', [roundId]);
+        // JOIN ตาราง topics เพื่อเอา topic_name กลับมาแสดงให้ Frontend เห็น
+        const sql = `
+            SELECT c.*, t.topic_name 
+            FROM criterias c
+            JOIN topics t ON c.topic_id = t.id
+            WHERE c.round_id = ?
+        `;
+        const [criterias] = await db.execute(sql, [roundId]);
         res.status(200).json({ status: 'success', data: criterias });
     } catch (error) {
         res.status(500).json({ status: 'error', message: error.message });

@@ -1,0 +1,15 @@
+# ไฟล์ .gitignore
+
+# ไม่เอาโฟลเดอร์ modules
+node_modules/
+
+# ไม่เอาไฟล์ environment variables (สำคัญมาก เพราะมีรหัสผ่าน)
+.env
+
+# ไม่เอาโฟลเดอร์ build ของ Vite
+dist/
+coverage/
+
+# ไฟล์ OS หรือ Editor
+.DS_Store
+.vscode/

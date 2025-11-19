@@ -9,128 +9,137 @@
       </v-col>
     </v-row>
 
-    <v-row>
-      <v-col cols="12" md="5">
-        <v-card class="elevation-4">
-          <v-card-title class="bg-primary text-white">
-            เพิ่มเกณฑ์ใหม่
-          </v-card-title>
-          <v-card-text class="pt-4">
-            <v-form @submit.prevent="submitCriteria" ref="form">
-              <v-select
-                v-model="formData.round_id"
-                :items="rounds"
-                item-title="round_name"
-                item-value="id"
-                label="เลือกรอบการประเมิน"
-                variant="outlined"
-                density="compact"
-                required
-                class="mb-3"
-              ></v-select>
+    <v-card class="mb-4 elevation-2">
+      <v-card-text>
+        <v-select
+          v-model="selectedRoundId"
+          :items="rounds"
+          item-title="round_name"
+          item-value="id"
+          label="เลือกรอบการประเมินที่ต้องการจัดการ"
+          variant="outlined"
+          hide-details
+        ></v-select>
+      </v-card-text>
+    </v-card>
 
-              <v-text-field
-                v-model="formData.topic_name"
-                label="ชื่อหัวข้อ (Topic)"
-                placeholder="เช่น สมรรถนะหลัก"
-                variant="outlined"
-                density="compact"
-                required
-                class="mb-3"
-              ></v-text-field>
+    <div v-if="selectedRoundId">
+      <v-row>
+        <v-col cols="12" md="4">
+          <v-card class="elevation-2 h-100">
+            <v-card-title class="bg-secondary text-white">
+              1. จัดการหัวข้อ (Topics)
+            </v-card-title>
+            <v-card-text class="pt-4">
+              <v-form @submit.prevent="createTopic">
+                <v-text-field
+                  v-model="topicForm.topic_name"
+                  label="ชื่อหัวข้อหลัก"
+                  placeholder="เช่น สมรรถนะหลัก, KPI"
+                  variant="outlined"
+                  density="compact"
+                  append-inner-icon="mdi-plus-circle"
+                  @click:append-inner="createTopic"
+                  :loading="topicLoading"
+                ></v-text-field>
+              </v-form>
 
-              <v-textarea
-                v-model="formData.indicator_name"
-                label="ตัวชี้วัด (Indicator)"
-                placeholder="รายละเอียดตัวชี้วัด..."
-                variant="outlined"
-                rows="3"
-                required
-                class="mb-3"
-              ></v-textarea>
+              <v-list density="compact" class="mt-2 border rounded">
+                <v-list-subheader>รายชื่อหัวข้อที่มีอยู่</v-list-subheader>
+                <v-list-item v-for="t in topics" :key="t.id" :title="t.topic_name">
+                  <template v-slot:prepend>
+                    <v-icon icon="mdi-label" color="secondary"></v-icon>
+                  </template>
+                </v-list-item>
+                <v-list-item v-if="topics.length === 0">
+                  <div class="text-caption text-grey text-center">ยังไม่มีหัวข้อ</div>
+                </v-list-item>
+              </v-list>
+            </v-card-text>
+          </v-card>
+        </v-col>
 
-              <v-text-field
-                v-model="formData.max_score"
-                label="คะแนนเต็ม"
-                type="number"
-                variant="outlined"
-                density="compact"
-                required
-                class="mb-3"
-              ></v-text-field>
+        <v-col cols="12" md="8">
+          <v-card class="elevation-4">
+            <v-card-title class="bg-primary text-white">
+              2. เพิ่มตัวชี้วัด (Indicators)
+            </v-card-title>
+            <v-card-text class="pt-4">
+              <v-form @submit.prevent="createCriteria" ref="criForm">
+                <v-select
+                  v-model="criteriaForm.topic_id"
+                  :items="topics"
+                  item-title="topic_name"
+                  item-value="id"
+                  label="เลือกหัวข้อ (Topic)"
+                  variant="outlined"
+                  required
+                  :rules="[v => !!v || 'กรุณาเลือกหัวข้อ']"
+                ></v-select>
 
-              <v-radio-group v-model="formData.scoring_type" label="รูปแบบการให้คะแนน" class="mb-3">
-                <v-radio label="แบบ มี/ไม่มี (Boolean)" value="boolean"></v-radio>
-                <v-radio label="แบบ สเกล 1-4 (Scale)" value="scale"></v-radio>
-              </v-radio-group>
+                <v-textarea
+                  v-model="criteriaForm.indicator_name"
+                  label="ตัวชี้วัด (Indicator)"
+                  placeholder="รายละเอียดสิ่งที่ต้องการวัด..."
+                  variant="outlined"
+                  rows="2"
+                  required
+                ></v-textarea>
 
-              <v-alert
-                v-if="formData.scoring_type === 'scale'"
-                type="info"
-                variant="tonal"
-                class="mb-4 text-caption"
-                border="start"
-              >
-                <div class="font-weight-bold mb-1">เกณฑ์คะแนนแบบสเกล 1-4:</div>
-                <ul style="list-style-type: none; padding-left: 0;">
-                  <li>- ระดับ 1 หมายถึง ปฏิบัติได้ต่ำกว่าระดับการปฏิบัติที่คาดหวังมาก</li>
-                  <li>- ระดับ 2 หมายถึง ปฏิบัติได้ต่ำกว่าระดับการปฏิบัติที่คาดหวัง</li>
-                  <li>- ระดับ 3 หมายถึง ปฏิบัติได้ตามระดับการปฏิบัติที่คาดหวัง</li>
-                  <li>- ระดับ 4 หมายถึง ปฏิบัติได้สูงกว่าระดับการปฏิบัติที่คาดหวัง</li>
-                </ul>
-              </v-alert>
+                <v-row>
+                  <v-col cols="6">
+                    <v-text-field
+                      v-model="criteriaForm.max_score"
+                      label="คะแนนเต็ม"
+                      type="number"
+                      variant="outlined"
+                      required
+                    ></v-text-field>
+                  </v-col>
+                  <v-col cols="6">
+                    <v-select
+                      v-model="criteriaForm.scoring_type"
+                      label="รูปแบบคะแนน"
+                      :items="[{title:'Scale 1-4', value:'scale'}, {title:'Boolean (มี/ไม่มี)', value:'boolean'}]"
+                      variant="outlined"
+                    ></v-select>
+                  </v-col>
+                </v-row>
 
-              <v-btn
-                type="submit"
-                color="success"
-                block
-                :loading="loading"
-              >
-                <v-icon start>mdi-plus</v-icon> บันทึกเกณฑ์
-              </v-btn>
-            </v-form>
-          </v-card-text>
-        </v-card>
-      </v-col>
+                <v-btn type="submit" color="success" block :loading="criLoading">
+                  บันทึกตัวชี้วัด
+                </v-btn>
+              </v-form>
+            </v-card-text>
+          </v-card>
 
-      <v-col cols="12" md="7">
-        <v-card class="elevation-2">
-          <v-card-title>
-            รายการเกณฑ์ในรอบปัจจุบัน
-            <v-spacer></v-spacer>
-          </v-card-title>
-          <v-table>
-            <thead>
-              <tr>
-                <th>หัวข้อ</th>
-                <th>ตัวชี้วัด</th>
-                <th>คะแนนเต็ม</th>
-                <th>รูปแบบ</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="item in criteriaList" :key="item.id">
-                <td>{{ item.topic_name }}</td>
-                <td>{{ item.indicator_name }}</td>
-                <td>{{ item.max_score }}</td>
-                <td>
-                  <v-chip :color="item.scoring_type === 'scale' ? 'primary' : 'secondary'" size="small">
-                    {{ item.scoring_type }}
-                  </v-chip>
-                </td>
-              </tr>
-              <tr v-if="criteriaList.length === 0">
-                <td colspan="4" class="text-center text-grey py-4">
-                  ยังไม่มีข้อมูลเกณฑ์ (กรุณาเลือกรอบการประเมิน)
-                </td>
-              </tr>
-            </tbody>
-          </v-table>
-        </v-card>
-      </v-col>
-    </v-row>
+          <v-card class="mt-4 elevation-2">
+            <v-card-title>รายการเกณฑ์ทั้งหมดในรอบนี้</v-card-title>
+            <v-table density="compact">
+              <thead>
+                <tr>
+                  <th>หัวข้อ</th>
+                  <th>ตัวชี้วัด</th>
+                  <th>คะแนน</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="item in criteriaList" :key="item.id">
+                  <td class="font-weight-bold text-secondary">{{ item.topic_name }}</td>
+                  <td>{{ item.indicator_name }}</td>
+                  <td>{{ item.max_score }}</td>
+                </tr>
+                <tr v-if="criteriaList.length === 0">
+                  <td colspan="3" class="text-center text-grey">ยังไม่มีข้อมูล</td>
+                </tr>
+              </tbody>
+            </v-table>
+          </v-card>
+        </v-col>
+      </v-row>
+    </div>
 
-    <v-snackbar v-model="snackbar.show" :color="snackbar.color" timeout="3000">
+    <v-snackbar v-model="snackbar.show" :color="snackbar.color">
       {{ snackbar.message }}
     </v-snackbar>
   </v-container>
@@ -141,71 +150,100 @@ import { ref, reactive, onMounted, watch } from 'vue';
 import api from '../../plugins/axios';
 
 const rounds = ref([]);
+const selectedRoundId = ref(null);
+const topics = ref([]);
 const criteriaList = ref([]);
-const loading = ref(false);
+
+const topicLoading = ref(false);
+const criLoading = ref(false);
 const snackbar = reactive({ show: false, message: '', color: 'success' });
 
-const formData = reactive({
-  round_id: null,
-  topic_name: '',
+const topicForm = reactive({ topic_name: '' });
+const criteriaForm = reactive({
+  topic_id: null,
   indicator_name: '',
-  description: '', // Optional
   max_score: 10,
   scoring_type: 'scale'
 });
 
-// Fetch Rounds on Mount
 onMounted(async () => {
   try {
     const res = await api.get('/admin/rounds');
     rounds.value = res.data.data;
-  } catch (error) {
-    console.error(error);
-  }
+  } catch (error) { console.error(error); }
 });
 
-// Fetch Criteria when Round Changes
-watch(() => formData.round_id, async (newId) => {
+// เมื่อเลือกรอบ -> โหลด Topic และ Criteria
+watch(selectedRoundId, async (newId) => {
   if (newId) {
-    await fetchCriteria(newId);
+    await fetchTopics(newId);
+    await fetchCriterias(newId);
   }
 });
 
-const fetchCriteria = async (roundId) => {
+const fetchTopics = async (roundId) => {
+  try {
+    const res = await api.get(`/admin/rounds/${roundId}/topics`);
+    topics.value = res.data.data;
+  } catch (error) { console.error(error); }
+};
+
+const fetchCriterias = async (roundId) => {
   try {
     const res = await api.get(`/admin/rounds/${roundId}/criterias`);
     criteriaList.value = res.data.data;
-  } catch (error) {
-    console.error(error);
-  }
+  } catch (error) { console.error(error); }
 };
 
-const submitCriteria = async () => {
-  if (!formData.round_id || !formData.topic_name || !formData.indicator_name) {
-    snackbar.message = 'กรุณากรอกข้อมูลให้ครบถ้วน';
-    snackbar.color = 'error';
-    snackbar.show = true;
-    return;
-  }
-
-  loading.value = true;
+// สร้าง Topic
+const createTopic = async () => {
+  if (!topicForm.topic_name) return;
+  topicLoading.value = true;
   try {
-    await api.post('/admin/criterias', formData);
-    
-    snackbar.message = 'เพิ่มเกณฑ์เรียบร้อยแล้ว';
-    snackbar.color = 'success';
+    await api.post('/admin/topics', {
+      round_id: selectedRoundId.value,
+      topic_name: topicForm.topic_name
+    });
+    snackbar.message = 'เพิ่มหัวข้อสำเร็จ';
     snackbar.show = true;
-    
-    // Refresh list and Reset form (partial)
-    await fetchCriteria(formData.round_id);
-    formData.indicator_name = '';
-    formData.topic_name = '';
+    topicForm.topic_name = '';
+    await fetchTopics(selectedRoundId.value);
   } catch (error) {
-    snackbar.message = error.response?.data?.message || 'เกิดข้อผิดพลาด';
+    snackbar.message = 'เกิดข้อผิดพลาด';
     snackbar.color = 'error';
     snackbar.show = true;
   } finally {
-    loading.value = false;
+    topicLoading.value = false;
+  }
+};
+
+// สร้าง Criteria
+const createCriteria = async () => {
+  if (!criteriaForm.topic_id || !criteriaForm.indicator_name) {
+    snackbar.message = 'กรุณากรอกข้อมูลให้ครบ';
+    snackbar.color = 'warning';
+    snackbar.show = true;
+    return;
+  }
+  criLoading.value = true;
+  try {
+    await api.post('/admin/criterias', {
+      round_id: selectedRoundId.value,
+      ...criteriaForm
+    });
+    snackbar.message = 'บันทึกตัวชี้วัดเรียบร้อย';
+    snackbar.color = 'success';
+    snackbar.show = true;
+    
+    criteriaForm.indicator_name = '';
+    // ไม่ Reset topic_id เพื่อให้ user เพิ่มข้อต่อไปในหัวข้อเดิมได้เลย สะดวกกว่า
+    await fetchCriterias(selectedRoundId.value);
+  } catch (error) {
+    snackbar.message = 'เกิดข้อผิดพลาด';
+    snackbar.color = 'error';
+    snackbar.show = true;
+  } finally {
+    criLoading.value = false;
   }
 };
 </script>
