@@ -1,7 +1,5 @@
-// [4] เขียนโค้ด Backend Base (Full Code)
-// [4] เชื่อมต่อ MySQL (ใช้ process.env อ่านค่า)
 const mysql = require('mysql2');
-require('dotenv').config({ path: '../.env' }); // โหลด .env จาก root
+require('dotenv').config({ path: '../.env' }); 
 
 const pool = mysql.createPool({
   host: process.env.DB_HOST || 'localhost',
@@ -14,5 +12,4 @@ const pool = mysql.createPool({
   queueLimit: 0
 });
 
-// Export pool ที่พร้อมใช้งานแบบ async/await
 module.exports = pool.promise();

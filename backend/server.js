@@ -14,7 +14,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Static Files (รูปภาพ/PDF)
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads'))); // [ถูกต้อง]
 
 // API Routes
 app.use('/api', apiRoutes);

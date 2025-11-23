@@ -228,8 +228,6 @@ const fetchCriterias = async () => {
     const evalRes = await api.get(`/user/evaluations/${selectedRoundId.value}`);
     const myEvals = evalRes.data.data || [];
 
-    console.log('My Evaluations:', myEvals); // Debug ดูข้อมูล
-
     criterias.value = fetchedCriterias.map(c => {
       // [CRITICAL FIX] ใช้ == เพื่อเทียบ ID (เผื่อเป็น string vs number) และเช็คว่าเป็นของตัวเอง
       const existing = myEvals.find(e => 
@@ -273,12 +271,13 @@ const submitItem = async (criteria) => {
       const formData = new FormData();
       formData.append('file', file[0]);
       
-      const uploadRes = await api.post('/upload', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
+      // [FIX สำคัญ] ลบ headers ออก, ให้ Axios จัดการ Content-Type: multipart/form-data เอง
+      const uploadRes = await api.post('/upload', formData); 
       
       if (uploadRes.data.status === 'success') {
         filePath = uploadRes.data.data.path;
+      } else {
+        throw new Error(uploadRes.data.message || "Upload failed.");
       }
     }
 

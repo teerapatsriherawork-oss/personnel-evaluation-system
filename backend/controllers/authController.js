@@ -40,8 +40,8 @@ exports.register = async (req, res) => {
             data: { userId: result.insertId }
         });
 
-    } catch (error) {
-        console.error("Register Error Details:", error); // [สำคัญ] แสดง Error ใน Terminal
+    } catch (error) { // ✅ แก้ไขให้ถูกต้อง
+        console.error("Register Error Details:", error);
         res.status(500).json({ 
             status: 'error', 
             message: error.message || 'เกิดข้อผิดพลาดที่ Server' 
@@ -83,7 +83,7 @@ exports.login = async (req, res) => {
                 user: { id: user.id, username: user.username, role: user.role, fullname: user.fullname }
             }
         });
-    } catch (error) {
+    } catch (error) { // ✅ แก้ไขให้ถูกต้อง
         console.error("Login Error Details:", error);
         res.status(500).json({ status: 'error', message: error.message });
     }

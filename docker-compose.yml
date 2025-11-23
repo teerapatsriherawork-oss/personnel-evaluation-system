@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  # 1. Database Service (ตัวเดิม)
+  # 1. Database Service
   db:
     image: mysql:latest
     container_name: eval_db
@@ -14,9 +14,9 @@ services:
     volumes:
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
       - mysql_data:/var/lib/mysql
-    command: --default-authentication-plugin=mysql_native_password
+    # ลบบรรทัด command ทิ้งไปแล้ว (เพื่อให้รองรับ MySQL ล่าสุด)
 
-  # 2. [NEW] Backend Service (เพิ่มส่วนนี้)
+  # 2. Backend Service
   backend:
     build: ./backend
     container_name: eval_backend
@@ -33,9 +33,7 @@ services:
     depends_on:
       - db
     volumes:
-      # [สำคัญ] บรรทัดนี้จะทำให้ไฟล์ใน Container โผล่ออกมาที่เครื่องเรา
       - ./backend/uploads:/app/uploads
-      # (Optional) Map โค้ดเพื่อให้แก้ไฟล์แล้วไม่ต้อง Build ใหม่ (Hot Reload)
       - ./backend:/app
       - /app/node_modules
 
