@@ -1,18 +1,14 @@
 const db = require('../config/database');
 
-// [5.2.5] Submit Self-Assessment (Score, File Path, URL)
+// Submit Self-Assessment
 exports.submitSelfAssessment = async (req, res) => {
     try {
-        const userId = req.user.id; // จาก Auth Middleware
+        const userId = req.user.id;
         const { round_id, criteria_id, score, evidence_file, evidence_url, comment } = req.body;
 
-        // ตรวจสอบว่ามีการส่งข้อมูลแล้วหรือยัง ถ้ามีให้ Update ถ้าไม่มี Insert
-        // ในที่นี้ใช้ INSERT ... ON DUPLICATE KEY UPDATE (ต้องมี Unique constraint) หรือเช็คก่อน
-        // เพื่อความง่ายและชัวร์ตาม Logic: Check -> Insert/Update
-        
         const [existing] = await db.execute(
             'SELECT id FROM evaluations WHERE round_id=? AND criteria_id=? AND evaluatee_id=? AND evaluator_id=?',
-            [round_id, criteria_id, userId, userId] // Self assessment: evaluator = evaluatee
+            [round_id, criteria_id, userId, userId]
         );
 
         if (existing.length > 0) {
@@ -33,14 +29,16 @@ exports.submitSelfAssessment = async (req, res) => {
     }
 };
 
-// ดึงผลประเมินของตัวเอง (เพื่อแสดงผล)
+// [FIX] แก้ไขฟังก์ชันนี้: ดึงผลประเมินทั้งหมดของฉัน (ทั้งที่ประเมินเอง และกรรมการประเมินให้)
 exports.getMyEvaluations = async (req, res) => {
     try {
         const userId = req.user.id;
         const { roundId } = req.params;
+        
+        // เอาเงื่อนไข evaluator_id = ? ออก เพื่อให้เห็นคะแนนที่คนอื่นประเมินเราด้วย
         const [evaluations] = await db.execute(
-            'SELECT * FROM evaluations WHERE evaluatee_id = ? AND round_id = ? AND evaluator_id = ?',
-            [userId, roundId, userId]
+            'SELECT * FROM evaluations WHERE evaluatee_id = ? AND round_id = ?',
+            [userId, roundId]
         );
         res.status(200).json({ status: 'success', data: evaluations });
     } catch (error) {
@@ -48,32 +46,22 @@ exports.getMyEvaluations = async (req, res) => {
     }
 };
 
-// [New Function] ดึง Progress ของทุกคนสำหรับหน้า Landing Page (ไม่ต้อง Login)
+// Public Progress (คงเดิม)
 exports.getPublicProgress = async (req, res) => {
     try {
-        // 1. หารอบที่เปิดอยู่ (Active Round)
         const [rounds] = await db.execute("SELECT id, round_name FROM rounds WHERE status = 'open' LIMIT 1");
-        
-        if (rounds.length === 0) {
-            return res.status(200).json({ status: 'success', data: [] }); // ไม่มีรอบที่เปิด
-        }
+        if (rounds.length === 0) return res.status(200).json({ status: 'success', data: [] });
         const roundId = rounds[0].id;
 
-        // 2. นับจำนวนเกณฑ์ทั้งหมดในรอบนี้ (Total Criterias)
         const [criteriaCount] = await db.execute("SELECT COUNT(*) as total FROM criterias WHERE round_id = ?", [roundId]);
         const totalCriteria = criteriaCount[0].total;
+        if (totalCriteria === 0) return res.status(200).json({ status: 'success', data: [] });
 
-        if (totalCriteria === 0) {
-            return res.status(200).json({ status: 'success', data: [] });
-        }
-
-        // 3. ดึงรายชื่อ User และนับจำนวนที่ประเมินไปแล้ว (Count Submitted)
-        // Logic: Join users กับ evaluations (นับเฉพาะของตัวเอง evaluator_id = evaluatee_id)
         const sql = `
             SELECT 
                 u.id, 
                 u.fullname, 
-                u.signature_path as profile_pic, -- สมมติใช้รูปนี้แทน Avatar
+                u.signature_path as profile_pic,
                 (SELECT COUNT(*) FROM evaluations e 
                  WHERE e.evaluatee_id = u.id 
                  AND e.round_id = ? 
@@ -81,10 +69,8 @@ exports.getPublicProgress = async (req, res) => {
             FROM users u
             WHERE u.role = 'user'
         `;
-        
         const [users] = await db.execute(sql, [roundId]);
 
-        // 4. คำนวณ %
         const progressData = users.map(user => ({
             id: user.id,
             fullname: user.fullname,
@@ -93,12 +79,7 @@ exports.getPublicProgress = async (req, res) => {
             percent: Math.round((user.submitted_count / totalCriteria) * 100)
         }));
 
-        res.status(200).json({ 
-            status: 'success', 
-            round_name: rounds[0].round_name,
-            data: progressData 
-        });
-
+        res.status(200).json({ status: 'success', round_name: rounds[0].round_name, data: progressData });
     } catch (error) {
         res.status(500).json({ status: 'error', message: error.message });
     }

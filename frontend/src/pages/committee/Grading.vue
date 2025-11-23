@@ -15,10 +15,10 @@
     <v-alert type="info" variant="tonal" class="mb-4" icon="mdi-information">
       <v-alert-title class="text-subtitle-1 font-weight-bold">เกณฑ์การให้คะแนน (Scale 1-4)</v-alert-title>
       <v-row dense class="text-body-2 mt-1">
-        <v-col cols="12" md="6"><strong>1 :</strong> ปฏิบัติได้ต่ำกว่าระดับการปฏิบัติที่คาดหวังมาก</v-col>
-        <v-col cols="12" md="6"><strong>2 :</strong> ปฏิบัติได้ต่ำกว่าระดับการปฏิบัติที่คาดหวัง</v-col>
-        <v-col cols="12" md="6"><strong>3 :</strong> ปฏิบัติได้ตามระดับการปฏิบัติที่คาดหวัง</v-col>
-        <v-col cols="12" md="6"><strong>4 :</strong> ปฏิบัติได้สูงกว่าระดับการปฏิบัติที่คาดหวัง</v-col>
+        <v-col cols="6" md="3"><strong>1 :</strong> ปฏิบัติได้ต่ำกว่าที่คาดหวังมาก</v-col>
+        <v-col cols="6" md="3"><strong>2 :</strong> ปฏิบัติได้ต่ำกว่าที่คาดหวัง</v-col>
+        <v-col cols="6" md="3"><strong>3 :</strong> ปฏิบัติได้ตามที่คาดหวัง</v-col>
+        <v-col cols="6" md="3"><strong>4 :</strong> ปฏิบัติได้สูงกว่าที่คาดหวัง</v-col>
       </v-row>
     </v-alert>
 
@@ -28,98 +28,103 @@
     </div>
 
     <v-form @submit.prevent="handleSubmitGrading" v-else>
-      <v-table class="elevation-2 border">
+      <v-table class="elevation-2 border mb-6">
         <thead>
           <tr class="bg-grey-lighten-3">
-            <th width="40%" class="font-weight-bold">เกณฑ์การประเมิน</th>
-            <th width="20%" class="font-weight-bold text-center">ข้อมูลจาก User (ตนเอง)</th>
-            <th width="40%" class="font-weight-bold text-center">การประเมินจากกรรมการ</th>
+            <th width="40%" class="font-weight-bold">หัวข้อ / ตัวชี้วัด</th>
+            <th width="20%" class="font-weight-bold text-center">ประเมินตนเอง (User)</th>
+            <th width="40%" class="font-weight-bold text-center">ส่วนของกรรมการ</th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="c in criterias" :key="c.id">
-            <td class="py-3">
-              <div class="font-weight-bold">{{ c.topic_name }}</div>
-              <div class="text-caption text-grey-darken-1">{{ c.indicator_name }}</div>
-              <div v-if="c.description" class="text-caption text-grey font-italic mt-1">
-                ({{ c.description }})
+            <td class="py-3 align-top">
+              <div class="font-weight-bold text-subtitle-1">{{ c.topic_name }}</div>
+              <div class="text-body-2 mb-1">{{ c.indicator_name }}</div>
+              <div v-if="c.description" class="text-caption text-grey">
+                {{ c.description }}
               </div>
             </td>
             
-            <td class="text-center">
-              <div v-if="c.self_score !== null">
-                <span class="text-caption">คะแนน:</span>
-                <span class="font-weight-bold text-blue">{{ c.self_score }}</span>
+            <td class="text-center align-top">
+              <div v-if="c.self_score !== null" class="mb-2">
+                <v-chip color="blue-lighten-4" variant="flat" class="font-weight-bold text-blue-darken-4">
+                  {{ c.self_score }} คะแนน
+                </v-chip>
                 <div v-if="c.self_comment" class="text-caption text-grey font-italic mt-1">"{{ c.self_comment }}"</div>
               </div>
-              <div v-else class="text-grey text-caption">- ยังไม่ประเมิน -</div>
+              <div v-else class="text-grey text-caption py-2">- รอการประเมิน -</div>
 
-              <div v-if="c.self_evidence_url" class="mt-1">
-                <v-btn :href="c.self_evidence_url" target="_blank" size="x-small" prepend-icon="mdi-link" variant="tonal" color="info">
+              <div class="d-flex flex-column gap-1 align-center">
+                <v-btn v-if="c.self_evidence_url" 
+                  :href="c.self_evidence_url" target="_blank" 
+                  size="x-small" prepend-icon="mdi-link" variant="tonal" color="info" class="mb-1">
                   เปิดลิงก์
                 </v-btn>
-              </div>
-              <div v-if="c.self_evidence_file" class="mt-1">
-                <v-btn :href="`http://localhost:5000${c.self_evidence_file}`" target="_blank" size="x-small" prepend-icon="mdi-file-download" variant="tonal" color="success">
-                  ดาวน์โหลดไฟล์
+                <v-btn v-if="c.self_evidence_file" 
+                  :href="`http://localhost:5000${c.self_evidence_file}`" target="_blank" 
+                  size="x-small" prepend-icon="mdi-file-download" variant="tonal" color="success">
+                  ไฟล์แนบ
                 </v-btn>
               </div>
             </td>
 
-            <td>
-              <v-label class="mb-2">คะแนน (กรรมการ)</v-label>
-              <v-radio-group v-model="formModels[c.id].score" inline density="compact" class="mb-2">
-                <v-radio v-if="c.scoring_type === 'scale'" label="1" :value="1"></v-radio>
-                <v-radio v-if="c.scoring_type === 'scale'" label="2" :value="2"></v-radio>
-                <v-radio v-if="c.scoring_type === 'scale'" label="3" :value="3"></v-radio>
-                <v-radio v-if="c.scoring_type === 'scale'" label="4" :value="4"></v-radio>
-                
-                <v-radio v-if="c.scoring_type === 'boolean'" label="ไม่มี" :value="0"></v-radio>
-                <v-radio v-if="c.scoring_type === 'boolean'" label="มี" :value="c.max_score"></v-radio>
+            <td class="align-top bg-grey-lighten-5 px-4 py-3">
+              <div class="mb-2 font-weight-bold text-caption text-grey-darken-2">คะแนนที่ให้:</div>
+              <v-radio-group v-model="formModels[c.id].score" inline density="compact" hide-details class="mb-2">
+                <template v-if="c.scoring_type === 'scale'">
+                  <v-radio v-for="n in 4" :key="n" :label="n.toString()" :value="n" color="primary"></v-radio>
+                </template>
+                <template v-else>
+                  <v-radio label="ไม่ผ่าน (0)" :value="0" color="error"></v-radio>
+                  <v-radio :label="`ผ่าน (${c.max_score})`" :value="c.max_score" color="success"></v-radio>
+                </template>
               </v-radio-group>
               
-              <v-textarea
+              <v-text-field
                 v-model="formModels[c.id].comment"
-                label="ความคิดเห็น (กรรมการ)"
+                label="ความคิดเห็น / ข้อเสนอแนะ"
                 variant="outlined"
-                rows="2"
                 density="compact"
-              ></v-textarea>
+                hide-details
+                bg-color="white"
+              ></v-text-field>
             </td>
           </tr>
         </tbody>
       </v-table>
       
-      <v-card class="mt-6 elevation-4">
-        <v-card-title class="bg-grey-lighten-2">
-          <v-icon start>mdi-check-decagram</v-icon>
-          ยืนยันการประเมิน
+      <v-card class="elevation-4 border-t-lg border-primary">
+        <v-card-title class="d-flex align-center">
+          <v-icon color="primary" start>mdi-check-decagram</v-icon>
+          ส่วนยืนยันผลการประเมิน
         </v-card-title>
         <v-card-text>
           <v-row>
             <v-col cols="12" md="6">
-              <v-label class="mb-2 font-weight-bold">ลงนาม (Signature)</v-label>
               <v-file-input
                 v-model="signatureFile"
-                label="อัปโหลดไฟล์ลายเซ็น (Image/PDF)"
+                label="อัปโหลดลายเซ็นดิจิทัล (ถ้ามี)"
                 variant="outlined"
                 accept=".jpg,.jpeg,.png,.pdf"
                 prepend-icon=""
                 prepend-inner-icon="mdi-draw"
-                hint="ไฟล์นี้จะถูกแนบไปกับการประเมิน"
+                hint="ไฟล์รูปภาพ หรือ PDF"
                 persistent-hint
+                density="compact"
               ></v-file-input>
             </v-col>
-            <v-col cols="12" md="6" class="d-flex align-end">
+            <v-col cols="12" md="6" class="d-flex align-center justify-end">
               <v-btn
                 type="submit"
                 color="success"
-                block
                 size="large"
+                width="200"
                 :loading="submitLoading"
-                prepend-icon="mdi-send"
+                prepend-icon="mdi-content-save-check"
+                class="font-weight-bold"
               >
-                ยืนยันและส่งผลการประเมิน
+                บันทึกผลการประเมิน
               </v-btn>
             </v-col>
           </v-row>
@@ -127,7 +132,8 @@
       </v-card>
     </v-form>
 
-    <v-snackbar v-model="snackbar.show" :color="snackbar.color" timeout="4000">
+    <v-snackbar v-model="snackbar.show" :color="snackbar.color" timeout="4000" location="top">
+      <v-icon start color="white">{{ snackbar.color === 'success' ? 'mdi-check-circle' : 'mdi-alert' }}</v-icon>
       {{ snackbar.message }}
     </v-snackbar>
   </v-container>
@@ -159,22 +165,18 @@ const fetchData = async () => {
   loading.value = true;
   try {
     const res = await api.get(`/committee/grading/${roundId.value}/${evaluateeId.value}`);
-    const fetchedData = res.data.data;
+    criterias.value = res.data.data;
     
-    criterias.value = fetchedData.map(c => {
+    criterias.value.forEach(c => {
       formModels[c.id] = {
         score: Number(c.my_score) || 0,
         comment: c.my_comment || '',
-        evidence_file: null 
       };
-      return c; 
     });
 
   } catch (error) {
     console.error(error);
-    snackbar.message = 'โหลดข้อมูลเกณฑ์ล้มเหลว';
-    snackbar.color = 'error';
-    snackbar.show = true;
+    showSnackbar('โหลดข้อมูลล้มเหลว', 'error');
   } finally {
     loading.value = false;
   }
@@ -186,20 +188,16 @@ const handleSubmitGrading = async () => {
   try {
     let signaturePath = null;
     
-    if (signatureFile.value.length > 0) {
-      const file = signatureFile.value[0];
+    if (signatureFile.value && signatureFile.value.length > 0) {
       const formData = new FormData();
-      formData.append('file', file);
-      
+      formData.append('file', signatureFile.value[0]);
       const uploadRes = await api.post('/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       signaturePath = uploadRes.data.data.path;
     }
     
-    const submissionPromises = [];
-    
-    for (const c of criterias.value) {
+    const promises = criterias.value.map(c => {
       const payload = {
         round_id: roundId.value,
         criteria_id: c.id,
@@ -212,14 +210,12 @@ const handleSubmitGrading = async () => {
         payload.evidence_file = signaturePath;
       }
       
-      submissionPromises.push(api.post('/committee/grade', payload));
-    }
+      return api.post('/committee/grade', payload);
+    });
     
-    await Promise.all(submissionPromises);
+    await Promise.all(promises);
     
-    snackbar.message = 'ส่งผลการประเมินเรียบร้อยแล้ว';
-    snackbar.color = 'success';
-    snackbar.show = true;
+    showSnackbar('บันทึกผลการประเมินเรียบร้อยแล้ว', 'success');
     
     setTimeout(() => {
       router.push('/evaluation-list');
@@ -227,11 +223,15 @@ const handleSubmitGrading = async () => {
 
   } catch (error) {
     console.error(error);
-    snackbar.message = error.response?.data?.message || 'เกิดข้อผิดพลาดในการบันทึก';
-    snackbar.color = 'error';
-    snackbar.show = true;
+    showSnackbar(error.response?.data?.message || 'เกิดข้อผิดพลาดในการบันทึก', 'error');
   } finally {
     submitLoading.value = false;
   }
+};
+
+const showSnackbar = (msg, color) => {
+  snackbar.message = msg;
+  snackbar.color = color;
+  snackbar.show = true;
 };
 </script>

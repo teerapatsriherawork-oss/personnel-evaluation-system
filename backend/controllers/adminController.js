@@ -1,5 +1,5 @@
 const db = require('../config/database');
-const bcrypt = require('bcryptjs'); // ต้องติดตั้ง: npm install bcryptjs
+const bcrypt = require('bcryptjs');
 
 // ==========================================
 // 1. ส่วนจัดการ Rounds (รอบการประเมิน)
@@ -115,7 +115,6 @@ exports.createUser = async (req, res) => {
     try {
         const { username, password, fullname, role } = req.body;
         
-        // ป้องกัน Error ข้อมูลไม่ครบ
         if(!username || !password || !fullname || !role) {
              return res.status(400).json({ status: 'error', message: 'กรุณากรอกข้อมูลให้ครบถ้วน' });
         }
@@ -169,16 +168,52 @@ exports.deleteUser = async (req, res) => {
 };
 
 // ==========================================
-// 5. ส่วนอื่นๆ (Mapping, Dashboard)
+// 5. ส่วนอื่นๆ (Mapping, Dashboard, Summary)
 // ==========================================
 exports.assignCommittee = async (req, res) => {
     try {
         const { round_id, evaluator_id, evaluatee_id, role } = req.body;
+
+        // ตรวจสอบการจับคู่ซ้ำ
+        const [existing] = await db.execute(
+            'SELECT id FROM committees_mapping WHERE round_id = ? AND evaluator_id = ? AND evaluatee_id = ?',
+            [round_id, evaluator_id, evaluatee_id]
+        );
+
+        if (existing.length > 0) {
+            return res.status(400).json({ 
+                status: 'error', 
+                message: 'มีการจับคู่กรรมการและผู้รับการประเมินคู่นี้ไปแล้วในรอบนี้' 
+            });
+        }
+
         const [result] = await db.execute(
             'INSERT INTO committees_mapping (round_id, evaluator_id, evaluatee_id, role) VALUES (?, ?, ?, ?)',
             [round_id, evaluator_id, evaluatee_id, role]
         );
         res.status(201).json({ status: 'success', message: 'Committee assigned', data: { id: result.insertId } });
+    } catch (error) {
+        res.status(500).json({ status: 'error', message: error.message });
+    }
+};
+
+// [NEW] ฟังก์ชันดึงรายการ Mapping ทั้งหมด (สำหรับหน้า ManageMapping)
+exports.getAllMappings = async (req, res) => {
+    try {
+        // ใช้ LEFT JOIN เพื่อกัน error กรณี user ถูกลบ
+        const sql = `
+            SELECT cm.id, r.round_name, 
+                   COALESCE(u1.fullname, 'Unknown') as evaluator, 
+                   COALESCE(u2.fullname, 'Unknown') as evaluatee, 
+                   cm.role
+            FROM committees_mapping cm
+            JOIN rounds r ON cm.round_id = r.id
+            LEFT JOIN users u1 ON cm.evaluator_id = u1.id
+            LEFT JOIN users u2 ON cm.evaluatee_id = u2.id
+            ORDER BY cm.id DESC
+        `;
+        const [rows] = await db.execute(sql);
+        res.status(200).json({ status: 'success', data: rows });
     } catch (error) {
         res.status(500).json({ status: 'error', message: error.message });
     }
@@ -199,6 +234,57 @@ exports.getDashboardStats = async (req, res) => {
             }
         });
     } catch (error) {
+        res.status(500).json({ status: 'error', message: error.message });
+    }
+};
+
+exports.getCommitteeSummary = async (req, res) => {
+    try {
+        const { roundId } = req.params;
+
+        const [criCount] = await db.execute('SELECT COUNT(*) as total FROM criterias WHERE round_id = ?', [roundId]);
+        const totalCriteria = criCount[0].total;
+
+        const sql = `
+            SELECT
+                cm.id as mapping_id,
+                COALESCE(u_ee.fullname, 'User Deleted') as evaluatee_name,
+                COALESCE(u_er.fullname, 'User Deleted') as evaluator_name,
+                cm.role as committee_role,
+                (
+                    SELECT COUNT(*) 
+                    FROM evaluations e 
+                    WHERE e.round_id = cm.round_id 
+                      AND e.evaluator_id = cm.evaluator_id 
+                      AND e.evaluatee_id = cm.evaluatee_id
+                ) as evaluated_count,
+                (
+                    SELECT COALESCE(SUM(score), 0) 
+                    FROM evaluations e 
+                    WHERE e.round_id = cm.round_id 
+                      AND e.evaluator_id = cm.evaluator_id 
+                      AND e.evaluatee_id = cm.evaluatee_id
+                ) as total_score
+            FROM committees_mapping cm
+            LEFT JOIN users u_ee ON cm.evaluatee_id = u_ee.id
+            LEFT JOIN users u_er ON cm.evaluator_id = u_er.id
+            WHERE cm.round_id = ?
+            ORDER BY u_ee.fullname ASC, u_er.fullname ASC
+        `;
+
+        const [results] = await db.execute(sql, [roundId]);
+
+        const data = results.map(row => ({
+            ...row,
+            total_criteria: totalCriteria,
+            is_complete: totalCriteria > 0 && row.evaluated_count >= totalCriteria,
+            progress_percent: totalCriteria > 0 ? Math.round((row.evaluated_count / totalCriteria) * 100) : 0
+        }));
+
+        res.status(200).json({ status: 'success', data });
+
+    } catch (error) {
+        console.error("[DEBUG] Error in getCommitteeSummary:", error);
         res.status(500).json({ status: 'error', message: error.message });
     }
 };

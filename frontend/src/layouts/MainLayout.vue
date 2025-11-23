@@ -14,13 +14,17 @@
           <v-list-item link to="/admin/rounds" prepend-icon="mdi-calendar-clock">
             <v-list-item-title>จัดการรอบประเมิน</v-list-item-title>
           </v-list-item>
-          <v-list-item link to="/manage-users" prepend-icon="mdi-account-group"> <v-list-item-title>จัดการผู้ใช้งาน (Users)</v-list-item-title>
+          <v-list-item link to="/manage-users" prepend-icon="mdi-account-group"> 
+            <v-list-item-title>จัดการผู้ใช้งาน (Users)</v-list-item-title>
           </v-list-item>
           <v-list-item link to="/manage-criteria" prepend-icon="mdi-format-list-checks">
             <v-list-item-title>จัดการเกณฑ์ (Criterias)</v-list-item-title>
           </v-list-item>
           <v-list-item link to="/manage-mapping" prepend-icon="mdi-account-network">
             <v-list-item-title>จัดการกรรมการ (Mapping)</v-list-item-title>
+          </v-list-item>
+          <v-list-item link to="/admin/committee-summary" prepend-icon="mdi-clipboard-list">
+            <v-list-item-title>สรุปผลรายกรรมการ</v-list-item-title>
           </v-list-item>
         </div>
 
