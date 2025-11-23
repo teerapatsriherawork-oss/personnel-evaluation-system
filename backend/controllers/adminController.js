@@ -64,8 +64,8 @@ exports.getTopicsByRound = async (req, res) => {
 // [5.1.1, 5.1.3] CRUD Criterias (จัดการตัวชี้วัด)
 exports.createCriteria = async (req, res) => {
     try {
-        // ต้องรับ topic_id มาจากหน้าบ้าน (ไม่ใช่ topic_name)
-        const { round_id, topic_id, indicator_name, description, max_score, scoring_type } = req.body;
+        // แก้ไข: เพิ่มค่า default ให้ description = null เพื่อป้องกัน Error undefined
+        const { round_id, topic_id, indicator_name, description = null, max_score, scoring_type } = req.body;
         
         const [result] = await db.execute(
             'INSERT INTO criterias (round_id, topic_id, indicator_name, description, max_score, scoring_type) VALUES (?, ?, ?, ?, ?, ?)',
@@ -73,7 +73,7 @@ exports.createCriteria = async (req, res) => {
         );
         res.status(201).json({ status: 'success', message: 'Criteria created', data: { id: result.insertId } });
     } catch (error) {
-        console.error("Error creating criteria:", error); // เพิ่ม Log ให้เห็น Error ชัดๆ
+        console.error("Error creating criteria:", error); // Log Error
         res.status(500).json({ status: 'error', message: error.message });
     }
 };
