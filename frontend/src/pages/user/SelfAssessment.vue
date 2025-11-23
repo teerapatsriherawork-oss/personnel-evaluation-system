@@ -271,13 +271,11 @@ const submitItem = async (criteria) => {
       const formData = new FormData();
       formData.append('file', file[0]);
       
-      // [FIX สำคัญ] ลบ headers ออก, ให้ Axios จัดการ Content-Type: multipart/form-data เอง
+      // [FIX สำคัญ] ลบ headers ออก (โค้ดที่ถูกต้อง)
       const uploadRes = await api.post('/upload', formData); 
       
       if (uploadRes.data.status === 'success') {
         filePath = uploadRes.data.data.path;
-      } else {
-        throw new Error(uploadRes.data.message || "Upload failed.");
       }
     }
 

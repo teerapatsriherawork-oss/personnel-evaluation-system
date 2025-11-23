@@ -1,3 +1,5 @@
+// File: backend/server.js
+
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -10,11 +12,12 @@ const app = express();
 
 // Middleware
 app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// [FIX: ลบ Global Body Parsers ออก]
+// app.use(express.json()); 
+// app.use(express.urlencoded({ extended: true })); 
 
 // Static Files (รูปภาพ/PDF)
-app.use('/uploads', express.static(path.join(__dirname, 'uploads'))); // [ถูกต้อง]
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // API Routes
 app.use('/api', apiRoutes);

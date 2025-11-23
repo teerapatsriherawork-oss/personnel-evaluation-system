@@ -1,5 +1,11 @@
+// File: backend/routes/apiRoutes.js
+
 const express = require('express');
 const router = express.Router();
+
+// [FIX: เพิ่ม Body Parsers คืนตรงนี้]
+router.use(express.json()); 
+router.use(express.urlencoded({ extended: true }));
 
 // Import Controllers
 const authController = require('../controllers/authController');

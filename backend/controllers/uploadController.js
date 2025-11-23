@@ -1,3 +1,5 @@
+// File: backend/controllers/uploadController.js
+
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
@@ -20,11 +22,9 @@ if (!fs.existsSync(UPLOAD_FOLDER)) {
 // Config Storage
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
-        // บังคับให้ลงโฟลเดอร์ที่ระบุไว้
         cb(null, UPLOAD_FOLDER);
     },
     filename: (req, file, cb) => {
-        // ตั้งชื่อไฟล์ป้องกันภาษาไทยเพี้ยน
         const ext = path.extname(file.originalname);
         const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
         cb(null, `file-${uniqueSuffix}${ext}`);
@@ -50,14 +50,12 @@ const upload = multer({
     fileFilter: fileFilter
 }).single('file'); // รับไฟล์ชื่อ 'file' เท่านั้น
 
-// [FIX 3] Wrapper Middleware เพื่อดัก Error ของ Multer และป้องกันการหลุดของไฟล์
+// [FIX 3] Wrapper Middleware ที่ถูกต้อง เพื่อดัก Multer Error
 exports.uploadMiddleware = (req, res, next) => {
     upload(req, res, (err) => {
-        if (err instanceof multer.MulterError) {
-            console.error("❌ Multer Error:", err);
-            return res.status(400).json({ status: 'error', message: `Upload Error: ${err.message}` });
-        } else if (err) {
-            console.error("❌ File Filter Error:", err);
+        if (err) {
+            // หากเกิด Error (เช่น ไฟล์ใหญ่เกิน, ผิดประเภท)
+            console.error("❌ File Upload Intercepted by Multer Error:", err.message);
             return res.status(400).json({ status: 'error', message: err.message });
         }
         next();
@@ -67,14 +65,12 @@ exports.uploadMiddleware = (req, res, next) => {
 exports.uploadFile = (req, res) => {
     if (!req.file) {
         // [Diagnostic Log] ถ้าไม่เห็นไฟล์
-        console.error("❌❌ UPLOAD FAILED: Multer did not receive req.file. Check Frontend headers or file size/type.");
+        console.error("❌❌ UPLOAD FAILED: Multer did not receive req.file. (Final Check)");
         return res.status(400).json({ status: 'error', message: 'กรุณาเลือกไฟล์ที่ถูกต้อง' });
     }
     
     // [Diagnostic Log] ถ้าเห็นไฟล์
     console.log(`[DEBUG] Multer received file size: ${req.file.size} bytes`); 
-    
-    // Log บอกพิกัดไฟล์ที่ถูกเซฟจริง (ตรวจสอบใน Terminal)
     console.log(`✅ File Saved Successfully!`);
     console.log(`   👉 Filename: ${req.file.filename}`);
     console.log(`   👉 Full Path: ${req.file.path}`); 
