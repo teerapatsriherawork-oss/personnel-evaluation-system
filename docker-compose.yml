@@ -1,26 +1,43 @@
-# [1] สร้าง Service 'db' ด้วย Docker
 version: '3.8'
 
 services:
+  # 1. Database Service (ตัวเดิม)
   db:
-    # ใช้ Image mysql:latest
     image: mysql:latest
     container_name: eval_db
     restart: unless-stopped
-    
-    # [1] ตั้งค่า Environment Variable
     environment:
       MYSQL_ROOT_PASSWORD: your_strong_password_here
       MYSQL_DATABASE: personnel_eval_db
-    
-    # [1] Map Port 3306
     ports:
       - "3306:3306"
-      
-    # Map Volume เพื่อให้ init.sql ทำงานตอนสร้าง Container [2]
     volumes:
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
       - mysql_data:/var/lib/mysql
+    command: --default-authentication-plugin=mysql_native_password
+
+  # 2. [NEW] Backend Service (เพิ่มส่วนนี้)
+  backend:
+    build: ./backend
+    container_name: eval_backend
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      - DB_HOST=db
+      - DB_USER=root
+      - DB_PASSWORD=your_strong_password_here
+      - DB_NAME=personnel_eval_db
+      - PORT=5000
+      - JWT_SECRET=your_jwt_secret_key_for_competition
+    depends_on:
+      - db
+    volumes:
+      # [สำคัญ] บรรทัดนี้จะทำให้ไฟล์ใน Container โผล่ออกมาที่เครื่องเรา
+      - ./backend/uploads:/app/uploads
+      # (Optional) Map โค้ดเพื่อให้แก้ไฟล์แล้วไม่ต้อง Build ใหม่ (Hot Reload)
+      - ./backend:/app
+      - /app/node_modules
 
 volumes:
   mysql_data:

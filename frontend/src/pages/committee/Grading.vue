@@ -24,15 +24,15 @@
 
     <div v-if="loading" class="text-center py-5">
       <v-progress-circular indeterminate color="primary" size="64"></v-progress-circular>
-      <div class="mt-3">กำลังโหลดเกณฑ์และข้อมูล...</div>
+      <div class="mt-3">กำลังโหลดข้อมูล...</div>
     </div>
 
     <v-form @submit.prevent="handleSubmitGrading" v-else>
       <v-table class="elevation-2 border mb-6">
         <thead>
           <tr class="bg-grey-lighten-3">
-            <th width="40%" class="font-weight-bold">หัวข้อ / ตัวชี้วัด</th>
-            <th width="20%" class="font-weight-bold text-center">ประเมินตนเอง (User)</th>
+            <th width="35%" class="font-weight-bold">หัวข้อ / ตัวชี้วัด</th>
+            <th width="25%" class="font-weight-bold text-center">ประเมินตนเอง (User)</th>
             <th width="40%" class="font-weight-bold text-center">ส่วนของกรรมการ</th>
           </tr>
         </thead>
@@ -51,20 +51,35 @@
                 <v-chip color="blue-lighten-4" variant="flat" class="font-weight-bold text-blue-darken-4">
                   {{ c.self_score }} คะแนน
                 </v-chip>
-                <div v-if="c.self_comment" class="text-caption text-grey font-italic mt-1">"{{ c.self_comment }}"</div>
+                <div v-if="c.self_comment" class="text-caption text-grey font-italic mt-2 pa-2 bg-grey-lighten-5 rounded">
+                  "{{ c.self_comment }}"
+                </div>
               </div>
               <div v-else class="text-grey text-caption py-2">- รอการประเมิน -</div>
 
-              <div class="d-flex flex-column gap-1 align-center">
+              <div class="d-flex flex-column gap-2 align-center mt-2">
                 <v-btn v-if="c.self_evidence_url" 
-                  :href="c.self_evidence_url" target="_blank" 
-                  size="x-small" prepend-icon="mdi-link" variant="tonal" color="info" class="mb-1">
-                  เปิดลิงก์
+                  :href="getExternalLink(c.self_evidence_url)" 
+                  target="_blank" 
+                  size="small" 
+                  prepend-icon="mdi-link" 
+                  variant="flat" 
+                  color="blue-darken-1" 
+                  class="text-white w-100"
+                  style="max-width: 200px;">
+                  เปิดลิงก์แนบ
                 </v-btn>
+
                 <v-btn v-if="c.self_evidence_file" 
-                  :href="`http://localhost:5000${c.self_evidence_file}`" target="_blank" 
-                  size="x-small" prepend-icon="mdi-file-download" variant="tonal" color="success">
-                  ไฟล์แนบ
+                  :href="getFileUrl(c.self_evidence_file)" 
+                  target="_blank" 
+                  size="small" 
+                  prepend-icon="mdi-file-eye" 
+                  variant="flat" 
+                  color="teal-darken-1" 
+                  class="text-white w-100"
+                  style="max-width: 200px;">
+                  ดูไฟล์แนบ
                 </v-btn>
               </div>
             </td>
@@ -94,7 +109,7 @@
         </tbody>
       </v-table>
       
-      <v-card class="elevation-4 border-t-lg border-primary">
+      <v-card class="elevation-4 border-t-lg border-primary mb-6">
         <v-card-title class="d-flex align-center">
           <v-icon color="primary" start>mdi-check-decagram</v-icon>
           ส่วนยืนยันผลการประเมิน
@@ -102,9 +117,28 @@
         <v-card-text>
           <v-row>
             <v-col cols="12" md="6">
+              <div v-if="existingSignature" class="mb-3 pa-3 bg-green-lighten-5 rounded border border-success d-flex align-center">
+                <v-icon color="success" class="mr-3" size="large">mdi-file-sign</v-icon>
+                <div>
+                  <div class="text-success font-weight-bold">มีลายเซ็นแล้ว</div>
+                  <div class="text-caption text-grey-darken-1">ระบบจะใช้ลายเซ็นเดิมนี้</div>
+                </div>
+                <v-spacer></v-spacer>
+                <v-btn 
+                  :href="getFileUrl(existingSignature)" 
+                  target="_blank" 
+                  variant="elevated" 
+                  size="small" 
+                  color="success"
+                  prepend-icon="mdi-eye"
+                >
+                  ดูลายเซ็น
+                </v-btn>
+              </div>
+
               <v-file-input
                 v-model="signatureFile"
-                label="อัปโหลดลายเซ็นดิจิทัล (ถ้ามี)"
+                :label="existingSignature ? 'เปลี่ยนลายเซ็น (อัปโหลดทับ)' : 'อัปโหลดลายเซ็นดิจิทัล'"
                 variant="outlined"
                 accept=".jpg,.jpeg,.png,.pdf"
                 prepend-icon=""
@@ -153,9 +187,25 @@ const evaluateeId = ref(route.params.evaluateeId);
 const criterias = ref([]);
 const formModels = reactive({});
 const signatureFile = ref([]);
+const existingSignature = ref(null);
 const loading = ref(true);
 const submitLoading = ref(false);
 const snackbar = reactive({ show: false, message: '', color: 'success' });
+
+const getFileUrl = (path) => {
+  if (!path) return '';
+  if (path.startsWith('http')) return path;
+  const cleanPath = path.startsWith('/') ? path : `/${path}`;
+  return `http://localhost:5000${cleanPath}`;
+};
+
+const getExternalLink = (url) => {
+  if (!url) return '';
+  if (!/^https?:\/\//i.test(url)) {
+    return `https://${url}`;
+  }
+  return url;
+};
 
 onMounted(async () => {
   await fetchData();
@@ -167,6 +217,11 @@ const fetchData = async () => {
     const res = await api.get(`/committee/grading/${roundId.value}/${evaluateeId.value}`);
     criterias.value = res.data.data;
     
+    // [UPDATED] หาจาก field 'committee_signature' ที่ Backend ส่งมา
+    if (criterias.value.length > 0 && criterias.value[0].committee_signature) {
+      existingSignature.value = criterias.value[0].committee_signature;
+    }
+
     criterias.value.forEach(c => {
       formModels[c.id] = {
         score: Number(c.my_score) || 0,
@@ -186,8 +241,9 @@ const handleSubmitGrading = async () => {
   submitLoading.value = true;
   
   try {
-    let signaturePath = null;
+    let signaturePath = existingSignature.value;
     
+    // ถ้าอัปโหลดใหม่ ให้ใช้ไฟล์ใหม่
     if (signatureFile.value && signatureFile.value.length > 0) {
       const formData = new FormData();
       formData.append('file', signatureFile.value[0]);
@@ -206,7 +262,8 @@ const handleSubmitGrading = async () => {
         comment: formModels[c.id].comment,
       };
       
-      if (c.id === criterias.value[0].id && signaturePath) {
+      // แนบไฟล์ลายเซ็นไปเฉพาะข้อแรก (เพื่อประหยัด DB)
+      if (c.id === criterias.value[0].id) {
         payload.evidence_file = signaturePath;
       }
       

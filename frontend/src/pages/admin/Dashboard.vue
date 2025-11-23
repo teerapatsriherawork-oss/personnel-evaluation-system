@@ -114,13 +114,7 @@
       </v-col>
     </v-row>
     
-    <v-row class="mt-2">
-      <v-col cols="12" class="text-right">
-        <v-btn color="primary" to="/admin/rounds" class="mr-2">จัดการรอบการประเมิน</v-btn>
-        <v-btn color="secondary" to="/manage-mapping">ไปหน้าจับคู่กรรมการ</v-btn>
-      </v-col>
-    </v-row>
-  </v-container>
+    </v-container>
 </template>
 
 <script setup>

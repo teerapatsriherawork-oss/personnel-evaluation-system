@@ -1,28 +1,38 @@
 const multer = require('multer');
 const path = require('path');
+const fs = require('fs'); // [เพิ่ม] import fs
 
-// [6.3] Config Storage
+// [เพิ่ม] ฟังก์ชันตรวจสอบและสร้างโฟลเดอร์ uploads ถ้ายังไม่มี
+const uploadDir = 'uploads/';
+if (!fs.existsSync(uploadDir)){
+    fs.mkdirSync(uploadDir, { recursive: true });
+    console.log('Created uploads folder automatically.');
+}
+
+// Config Storage
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
-        cb(null, 'uploads/'); // โฟลเดอร์ปลายทาง (ต้องสร้างไว้แล้วใน Part 1)
+        cb(null, uploadDir); // ใช้ตัวแปร uploadDir
     },
     filename: (req, file, cb) => {
         // ตั้งชื่อไฟล์ให้ไม่ซ้ำ: timestamp-random.extension
+        // แก้ไขชื่อไฟล์ให้รองรับภาษาไทย (เปลี่ยนเป็น timestamp อย่างเดียว หรือ encode)
         const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
         cb(null, uniqueSuffix + path.extname(file.originalname));
     }
 });
 
-// [6.3] File Filter: Allow PDF and Images only
+// File Filter: Allow PDF and Images only
 const fileFilter = (req, file, cb) => {
     const allowedTypes = /jpeg|jpg|png|pdf/;
+    // ตรวจสอบทั้งนามสกุลและ mimetype
     const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
     const mimetype = allowedTypes.test(file.mimetype);
 
     if (extname && mimetype) {
         return cb(null, true);
     } else {
-        cb(new Error('Only images and PDFs are allowed!'));
+        cb(new Error('Only images and PDFs are allowed! (Max 5MB)'));
     }
 };
 
@@ -41,6 +51,7 @@ exports.uploadFile = (req, res) => {
     }
     
     // Return path เพื่อนำไปบันทึกลง DB
+    // หมายเหตุ: path ที่ส่งกลับต้องตรงกับที่ server.js เปิด static ไว้ (คือ /uploads/filename)
     res.status(200).json({
         status: 'success',
         message: 'File uploaded successfully',

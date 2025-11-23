@@ -45,6 +45,7 @@ exports.getGradingInfo = async (req, res) => {
         const evaluatorId = req.user.id;
         const { roundId, evaluateeId } = req.params;
 
+        // 1. ดึงเกณฑ์
         const [criterias] = await db.execute(
             `SELECT c.*, t.topic_name 
              FROM criterias c
@@ -53,6 +54,7 @@ exports.getGradingInfo = async (req, res) => {
             [roundId]
         );
 
+        // 2. ดึงผลการประเมิน (ทั้งของ User และของ Committee)
         const [evaluations] = await db.execute(
             `SELECT * FROM evaluations 
              WHERE round_id = ? 
@@ -60,6 +62,13 @@ exports.getGradingInfo = async (req, res) => {
              AND (evaluator_id = ? OR evaluator_id = ?)`,
             [roundId, evaluateeId, evaluateeId, evaluatorId]
         );
+
+        // [NEW] 3. ดึงลายเซ็นจาก Profile ของกรรมการ (เพื่อใช้เป็นค่า Default)
+        const [evaluatorUser] = await db.execute(
+            'SELECT signature_path FROM users WHERE id = ?',
+            [evaluatorId]
+        );
+        const profileSignature = (evaluatorUser.length > 0) ? evaluatorUser[0].signature_path : null;
 
         const result = criterias.map(cri => {
             const selfEval = evaluations.find(e => e.criteria_id === cri.id && e.evaluator_id == evaluateeId);
@@ -71,8 +80,13 @@ exports.getGradingInfo = async (req, res) => {
                 self_comment: selfEval ? selfEval.comment : null,
                 self_evidence_url: selfEval ? selfEval.evidence_url : null,
                 self_evidence_file: selfEval ? selfEval.evidence_file : null,
+                
                 my_score: myEval ? myEval.score : 0, 
-                my_comment: myEval ? myEval.comment : ''
+                my_comment: myEval ? myEval.comment : '',
+                my_evidence_file: myEval ? myEval.evidence_file : null,
+                
+                // ส่งลายเซ็นจาก Profile ไปด้วย
+                profile_signature: profileSignature
             };
         });
 
@@ -106,10 +120,13 @@ exports.submitGrading = async (req, res) => {
         if (existing.length > 0) {
             let sql = 'UPDATE evaluations SET score=?, comment=?';
             const params = [finalScore, comment];
+            
+            // ถ้ามีการส่ง evidence_file (ลายเซ็น) มาให้อัปเดตด้วย
             if (evidence_file) {
                 sql += ', evidence_file=?';
                 params.push(evidence_file);
             }
+            
             sql += ' WHERE id=?';
             params.push(existing[0].id);
             await db.execute(sql, params);

@@ -106,16 +106,34 @@
                 </div>
                 <v-row>
                   <v-col cols="12" md="6">
+                    
+                    <div v-if="formModels[criteria.id].evidence_file" class="mb-3 pa-3 bg-green-lighten-5 rounded border border-success d-flex align-center">
+                        <v-icon color="success" class="mr-3">mdi-file-check</v-icon>
+                        <div class="mr-auto">
+                            <div class="text-success font-weight-bold">มีไฟล์แนบแล้ว</div>
+                            <div class="text-caption text-grey-darken-1">คุณได้อัปโหลดไว้แล้ว</div>
+                        </div>
+                        <v-btn
+                            :href="getFileUrl(formModels[criteria.id].evidence_file)"
+                            target="_blank"
+                            color="success"
+                            variant="elevated"
+                            size="small"
+                            prepend-icon="mdi-eye"
+                        >
+                            กดดูไฟล์
+                        </v-btn>
+                    </div>
+
                     <v-file-input
                       v-model="fileInputs[criteria.id]"
-                      label="แนบไฟล์ (PDF/Image)"
+                      :label="formModels[criteria.id].evidence_file ? 'อัปโหลดใหม่ (เพื่อเปลี่ยนไฟล์เดิม)' : 'แนบไฟล์ (PDF/Image)'"
                       variant="outlined"
                       density="compact"
                       prepend-icon=""
                       prepend-inner-icon="mdi-file-upload"
                       accept=".pdf,.jpg,.jpeg,.png"
                       show-size
-                      :hint="formModels[criteria.id].evidence_file ? 'มีไฟล์เดิมอยู่แล้ว' : ''"
                       persistent-hint
                     ></v-file-input>
                   </v-col>
@@ -128,6 +146,12 @@
                       density="compact"
                       prepend-inner-icon="mdi-link"
                     ></v-text-field>
+                    
+                    <div v-if="formModels[criteria.id].evidence_url" class="mt-1 text-right">
+                        <a :href="formModels[criteria.id].evidence_url" target="_blank" class="text-caption text-decoration-none text-primary font-weight-bold">
+                            <v-icon size="x-small" start>mdi-open-in-new</v-icon>เปิดลิงก์ที่บันทึกไว้
+                        </a>
+                    </div>
                   </v-col>
                 </v-row>
               </v-sheet>
@@ -136,6 +160,7 @@
                 type="submit"
                 color="primary"
                 block
+                size="large"
                 :loading="loadingIds[criteria.id]"
               >
                 บันทึกหัวข้อนี้
@@ -159,23 +184,30 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue';
 import api from '../../plugins/axios';
+import { useAuthStore } from '../../stores/authStore'; 
 
+const authStore = useAuthStore(); 
 const rounds = ref([]);
 const selectedRoundId = ref(null);
 const criterias = ref([]);
 const loading = ref(false);
 const snackbar = reactive({ show: false, message: '', color: 'success' });
 
-// Store form data per criteria ID
 const formModels = reactive({});
-// Store raw file objects per criteria ID
 const fileInputs = reactive({});
-// Store loading state per criteria ID
 const loadingIds = reactive({});
+
+// สร้าง URL สำหรับไฟล์แนบ
+const getFileUrl = (path) => {
+  if (!path) return '';
+  if (path.startsWith('http')) return path;
+  // เติม / ข้างหน้าถ้าไม่มี
+  const cleanPath = path.startsWith('/') ? path : `/${path}`;
+  return `http://localhost:5000${cleanPath}`;
+};
 
 onMounted(async () => {
   try {
-    // Fetch Active Rounds
     const res = await api.get('/admin/rounds');
     rounds.value = res.data.data.filter(r => r.status === 'open');
   } catch (error) {
@@ -188,23 +220,28 @@ const fetchCriterias = async () => {
   
   loading.value = true;
   try {
-    // 1. Get Criterias
+    // 1. ดึงเกณฑ์
     const criRes = await api.get(`/admin/rounds/${selectedRoundId.value}/criterias`);
     const fetchedCriterias = criRes.data.data;
 
-    // 2. Get Existing Evaluations
+    // 2. ดึงผลประเมินของฉัน
     const evalRes = await api.get(`/user/evaluations/${selectedRoundId.value}`);
     const myEvals = evalRes.data.data || [];
 
-    // 3. Merge Data
+    console.log('My Evaluations:', myEvals); // Debug ดูข้อมูล
+
     criterias.value = fetchedCriterias.map(c => {
-      const existing = myEvals.find(e => e.criteria_id === c.id);
+      // [CRITICAL FIX] ใช้ == เพื่อเทียบ ID (เผื่อเป็น string vs number) และเช็คว่าเป็นของตัวเอง
+      const existing = myEvals.find(e => 
+        e.criteria_id == c.id && 
+        e.evaluator_id == authStore.user.id
+      );
       
       formModels[c.id] = {
         score: existing ? Number(existing.score) : 0,
         comment: existing?.comment || '',
         evidence_url: existing?.evidence_url || '',
-        evidence_file: existing?.evidence_file || ''
+        evidence_file: existing?.evidence_file || '' // เก็บ Path ไฟล์
       };
 
       return {
@@ -228,9 +265,9 @@ const submitItem = async (criteria) => {
   loadingIds[cId] = true;
 
   try {
-    let filePath = formModels[cId].evidence_file;
+    let filePath = formModels[cId].evidence_file; // เริ่มต้นด้วยค่าเดิม
 
-    // Step 1: Upload File if selected
+    // ถ้ามีการเลือกไฟล์ใหม่ -> อัปโหลด
     const file = fileInputs[cId]; 
     if (file && file.length > 0) {
       const formData = new FormData();
@@ -245,22 +282,23 @@ const submitItem = async (criteria) => {
       }
     }
 
-    // Step 2: Submit Evaluation Data
     const payload = {
       round_id: selectedRoundId.value,
       criteria_id: cId,
       score: formModels[cId].score,
       comment: formModels[cId].comment,
       evidence_url: formModels[cId].evidence_url,
-      evidence_file: filePath
+      evidence_file: filePath // ส่งค่า (เดิม หรือ ใหม่) กลับไปบันทึก
     };
 
     await api.post('/user/evaluate', payload);
 
+    // อัปเดตสถานะหน้าจอทันที
     criteria.isSubmitted = true;
-    formModels[cId].evidence_file = filePath;
+    formModels[cId].evidence_file = filePath; 
+    fileInputs[cId] = null; // ล้าง Input
     
-    snackbar.message = 'บันทึกสำเร็จ';
+    snackbar.message = 'บันทึกข้อมูลสำเร็จ';
     snackbar.color = 'success';
     snackbar.show = true;
 

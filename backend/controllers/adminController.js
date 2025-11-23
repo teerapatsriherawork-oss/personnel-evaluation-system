@@ -38,6 +38,30 @@ exports.updateRoundStatus = async (req, res) => {
     }
 };
 
+exports.updateRound = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { round_name, start_date, end_date } = req.body;
+        await db.execute(
+            'UPDATE rounds SET round_name=?, start_date=?, end_date=? WHERE id=?',
+            [round_name, start_date, end_date, id]
+        );
+        res.status(200).json({ status: 'success', message: 'Round updated' });
+    } catch (error) {
+        res.status(500).json({ status: 'error', message: error.message });
+    }
+};
+
+exports.deleteRound = async (req, res) => {
+    try {
+        const { id } = req.params;
+        await db.execute('DELETE FROM rounds WHERE id=?', [id]);
+        res.status(200).json({ status: 'success', message: 'Round deleted' });
+    } catch (error) {
+        res.status(500).json({ status: 'error', message: error.message });
+    }
+};
+
 // ==========================================
 // 2. ส่วนจัดการ Topics (หัวข้อ)
 // ==========================================
@@ -60,6 +84,27 @@ exports.getTopicsByRound = async (req, res) => {
         const { roundId } = req.params;
         const [topics] = await db.execute('SELECT * FROM topics WHERE round_id = ?', [roundId]);
         res.status(200).json({ status: 'success', data: topics });
+    } catch (error) {
+        res.status(500).json({ status: 'error', message: error.message });
+    }
+};
+
+exports.updateTopic = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { topic_name } = req.body;
+        await db.execute('UPDATE topics SET topic_name = ? WHERE id = ?', [topic_name, id]);
+        res.status(200).json({ status: 'success', message: 'Topic updated' });
+    } catch (error) {
+        res.status(500).json({ status: 'error', message: error.message });
+    }
+};
+
+exports.deleteTopic = async (req, res) => {
+    try {
+        const { id } = req.params;
+        await db.execute('DELETE FROM topics WHERE id = ?', [id]);
+        res.status(200).json({ status: 'success', message: 'Topic deleted' });
     } catch (error) {
         res.status(500).json({ status: 'error', message: error.message });
     }
@@ -94,6 +139,33 @@ exports.getCriteriasByRound = async (req, res) => {
         `;
         const [criterias] = await db.execute(sql, [roundId]);
         res.status(200).json({ status: 'success', data: criterias });
+    } catch (error) {
+        res.status(500).json({ status: 'error', message: error.message });
+    }
+};
+
+exports.updateCriteria = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { topic_id, indicator_name, description, max_score, scoring_type, require_evidence } = req.body;
+        
+        await db.execute(
+            `UPDATE criterias 
+             SET topic_id=?, indicator_name=?, description=?, max_score=?, scoring_type=?, require_evidence=? 
+             WHERE id=?`,
+            [topic_id, indicator_name, description, max_score, scoring_type, require_evidence, id]
+        );
+        res.status(200).json({ status: 'success', message: 'Criteria updated' });
+    } catch (error) {
+        res.status(500).json({ status: 'error', message: error.message });
+    }
+};
+
+exports.deleteCriteria = async (req, res) => {
+    try {
+        const { id } = req.params;
+        await db.execute('DELETE FROM criterias WHERE id = ?', [id]);
+        res.status(200).json({ status: 'success', message: 'Criteria deleted' });
     } catch (error) {
         res.status(500).json({ status: 'error', message: error.message });
     }
@@ -174,7 +246,6 @@ exports.assignCommittee = async (req, res) => {
     try {
         const { round_id, evaluator_id, evaluatee_id, role } = req.body;
 
-        // ตรวจสอบการจับคู่ซ้ำ
         const [existing] = await db.execute(
             'SELECT id FROM committees_mapping WHERE round_id = ? AND evaluator_id = ? AND evaluatee_id = ?',
             [round_id, evaluator_id, evaluatee_id]
@@ -197,15 +268,14 @@ exports.assignCommittee = async (req, res) => {
     }
 };
 
-// [NEW] ฟังก์ชันดึงรายการ Mapping ทั้งหมด (สำหรับหน้า ManageMapping)
 exports.getAllMappings = async (req, res) => {
     try {
-        // ใช้ LEFT JOIN เพื่อกัน error กรณี user ถูกลบ
         const sql = `
             SELECT cm.id, r.round_name, 
                    COALESCE(u1.fullname, 'Unknown') as evaluator, 
                    COALESCE(u2.fullname, 'Unknown') as evaluatee, 
-                   cm.role
+                   cm.role,
+                   cm.round_id, cm.evaluator_id, cm.evaluatee_id
             FROM committees_mapping cm
             JOIN rounds r ON cm.round_id = r.id
             LEFT JOIN users u1 ON cm.evaluator_id = u1.id
@@ -214,6 +284,43 @@ exports.getAllMappings = async (req, res) => {
         `;
         const [rows] = await db.execute(sql);
         res.status(200).json({ status: 'success', data: rows });
+    } catch (error) {
+        res.status(500).json({ status: 'error', message: error.message });
+    }
+};
+
+exports.updateMapping = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { round_id, evaluator_id, evaluatee_id, role } = req.body;
+
+        const [existing] = await db.execute(
+            'SELECT id FROM committees_mapping WHERE round_id = ? AND evaluator_id = ? AND evaluatee_id = ? AND id != ?',
+            [round_id, evaluator_id, evaluatee_id, id]
+        );
+
+        if (existing.length > 0) {
+            return res.status(400).json({ 
+                status: 'error', 
+                message: 'มีการจับคู่กรรมการและผู้รับการประเมินคู่นี้ไปแล้วในรอบนี้' 
+            });
+        }
+
+        await db.execute(
+            'UPDATE committees_mapping SET round_id=?, evaluator_id=?, evaluatee_id=?, role=? WHERE id=?',
+            [round_id, evaluator_id, evaluatee_id, role, id]
+        );
+        res.status(200).json({ status: 'success', message: 'Mapping updated' });
+    } catch (error) {
+        res.status(500).json({ status: 'error', message: error.message });
+    }
+};
+
+exports.deleteMapping = async (req, res) => {
+    try {
+        const { id } = req.params;
+        await db.execute('DELETE FROM committees_mapping WHERE id=?', [id]);
+        res.status(200).json({ status: 'success', message: 'Mapping deleted' });
     } catch (error) {
         res.status(500).json({ status: 'error', message: error.message });
     }
@@ -285,6 +392,65 @@ exports.getCommitteeSummary = async (req, res) => {
 
     } catch (error) {
         console.error("[DEBUG] Error in getCommitteeSummary:", error);
+        res.status(500).json({ status: 'error', message: error.message });
+    }
+};
+
+// [UPDATED] Committee Progress (รวมรายชื่อผู้รับการประเมิน)
+exports.getCommitteeProgress = async (req, res) => {
+    try {
+        const { roundId } = req.params;
+        
+        const [criCount] = await db.execute('SELECT COUNT(*) as total FROM criterias WHERE round_id = ?', [roundId]);
+        const totalCriteriaPerPerson = criCount[0].total;
+
+        if (totalCriteriaPerPerson === 0) {
+             return res.status(200).json({ status: 'success', data: [] });
+        }
+
+        const sql = `
+            SELECT 
+                u.id as committee_id,
+                u.fullname as committee_name,
+                COUNT(cm.evaluatee_id) as total_evaluatees,
+                GROUP_CONCAT(u_ee.fullname SEPARATOR ', ') as evaluatee_list,
+                (
+                    SELECT COUNT(*) 
+                    FROM evaluations e 
+                    WHERE e.evaluator_id = u.id 
+                    AND e.round_id = ?
+                ) as total_evaluations_done
+            FROM users u
+            JOIN committees_mapping cm ON u.id = cm.evaluator_id
+            LEFT JOIN users u_ee ON cm.evaluatee_id = u_ee.id
+            WHERE cm.round_id = ?
+            GROUP BY u.id, u.fullname
+        `;
+
+        const [rows] = await db.execute(sql, [roundId, roundId]);
+
+        const data = rows.map(row => {
+            const totalTasks = row.total_evaluatees * totalCriteriaPerPerson;
+            const rawProgress = totalTasks > 0 ? (row.total_evaluations_done / totalTasks) * 100 : 0;
+            const progress = Math.min(Math.round(rawProgress), 100);
+            
+            return {
+                committee_id: row.committee_id,
+                committee_name: row.committee_name,
+                total_evaluatees: row.total_evaluatees,
+                evaluatee_list: row.evaluatee_list,
+                total_criteria_per_person: totalCriteriaPerPerson,
+                total_evaluations_done: row.total_evaluations_done,
+                total_tasks: totalTasks,
+                progress: progress,
+                is_complete: progress >= 100
+            };
+        });
+
+        res.status(200).json({ status: 'success', data });
+
+    } catch (error) {
+        console.error("Error in getCommitteeProgress:", error);
         res.status(500).json({ status: 'error', message: error.message });
     }
 };

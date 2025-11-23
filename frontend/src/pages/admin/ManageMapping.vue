@@ -30,14 +30,14 @@
             </v-col>
           </v-row>
           <v-row justify="end">
-            <v-btn type="submit" color="success" :loading="loading">บันทึกการจับคู่</v-btn>
+            <v-btn type="submit" color="success" :loading="loading" prepend-icon="mdi-plus">บันทึกการจับคู่</v-btn>
           </v-row>
         </v-form>
       </v-card-text>
     </v-card>
 
     <v-card class="elevation-2 border">
-      <v-card-title class="bg-grey-lighten-4">
+      <v-card-title class="bg-grey-lighten-4 d-flex align-center">
         <v-icon start>mdi-table-search</v-icon> รายการที่จับคู่ไว้แล้ว
         <v-spacer></v-spacer>
         <v-btn icon="mdi-refresh" size="small" variant="text" @click="fetchMappings"></v-btn>
@@ -50,6 +50,7 @@
             <th>ผู้รับการประเมิน</th>
             <th>กรรมการ</th>
             <th>ตำแหน่ง</th>
+            <th class="text-center">จัดการ</th>
           </tr>
         </thead>
         <tbody>
@@ -58,14 +59,68 @@
             <td>{{ map.round_name }}</td>
             <td>{{ map.evaluatee }}</td>
             <td>{{ map.evaluator }}</td>
-            <td>{{ map.role }}</td>
+            <td>
+              <v-chip :color="map.role === 'chairman' ? 'orange' : 'blue-grey'" size="small" label>
+                {{ map.role === 'chairman' ? 'ประธาน' : 'กรรมการ' }}
+              </v-chip>
+            </td>
+            <td class="text-center">
+              <v-btn
+                icon="mdi-pencil"
+                size="x-small"
+                variant="text"
+                color="primary"
+                @click="openEditDialog(map)"
+              ></v-btn>
+              <v-btn
+                icon="mdi-delete"
+                size="x-small"
+                variant="text"
+                color="error"
+                @click="confirmDelete(map)"
+              ></v-btn>
+            </td>
           </tr>
           <tr v-if="existingMappings.length === 0">
-            <td colspan="5" class="text-center text-grey py-4">ยังไม่มีข้อมูล</td>
+            <td colspan="6" class="text-center text-grey py-4">ยังไม่มีข้อมูล</td>
           </tr>
         </tbody>
       </v-table>
     </v-card>
+
+    <v-dialog v-model="editDialog" max-width="600px">
+      <v-card>
+        <v-card-title class="bg-primary text-white">แก้ไขการจับคู่</v-card-title>
+        <v-card-text class="pt-4">
+          <v-form @submit.prevent="saveEdit">
+            <v-select v-model="editingItem.round_id" :items="rounds" item-title="round_name" item-value="id" label="รอบการประเมิน" variant="outlined"></v-select>
+            <v-select v-model="editingItem.evaluatee_id" :items="users" item-title="fullname" item-value="id" label="ผู้รับการประเมิน" variant="outlined"></v-select>
+            <v-select v-model="editingItem.evaluator_id" :items="committees" item-title="fullname" item-value="id" label="กรรมการ" variant="outlined"></v-select>
+            <v-select v-model="editingItem.role" :items="roles" item-title="title" item-value="value" label="ตำแหน่ง" variant="outlined"></v-select>
+            
+            <div class="d-flex justify-end mt-2">
+              <v-btn color="grey" variant="text" class="mr-2" @click="editDialog = false">ยกเลิก</v-btn>
+              <v-btn type="submit" color="success">บันทึกการแก้ไข</v-btn>
+            </div>
+          </v-form>
+        </v-card-text>
+      </v-card>
+    </v-dialog>
+
+    <v-dialog v-model="deleteDialog" max-width="400px">
+      <v-card>
+        <v-card-title class="text-error">ยืนยันการลบ?</v-card-title>
+        <v-card-text>
+          คุณต้องการลบการจับคู่นี้ใช่หรือไม่?<br>
+          <small class="text-grey">ข้อมูล: {{ itemToDelete?.evaluatee }} - {{ itemToDelete?.evaluator }}</small>
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer></v-spacer>
+          <v-btn color="grey" variant="text" @click="deleteDialog = false">ยกเลิก</v-btn>
+          <v-btn color="error" variant="elevated" @click="submitDelete">ลบข้อมูล</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
 
     <v-snackbar v-model="snackbar.show" :color="snackbar.color">{{ snackbar.message }}</v-snackbar>
   </v-container>
@@ -83,6 +138,12 @@ const snackbar = reactive({ show: false, message: '', color: 'success' });
 
 const formData = reactive({ round_id: null, evaluator_id: null, evaluatee_id: null, role: 'member' });
 const roles = [{ title: 'ประธาน', value: 'chairman' }, { title: 'กรรมการ', value: 'member' }];
+
+// Edit/Delete State
+const editDialog = ref(false);
+const deleteDialog = ref(false);
+const editingItem = reactive({});
+const itemToDelete = ref(null);
 
 onMounted(async () => {
   await Promise.all([fetchRounds(), fetchUsers(), fetchMappings()]);
@@ -106,9 +167,46 @@ const submitMapping = async () => {
   try {
     await api.post('/admin/mapping', formData);
     snackbar.message = 'บันทึกสำเร็จ'; snackbar.color = 'success'; snackbar.show = true;
-    await fetchMappings(); // Refresh table
+    await fetchMappings();
   } catch (error) {
     snackbar.message = error.response?.data?.message || 'Error'; snackbar.color = 'error'; snackbar.show = true;
   } finally { loading.value = false; }
+};
+
+// [NEW] Edit Functions
+const openEditDialog = (item) => {
+  Object.assign(editingItem, item); // Copy values
+  editDialog.value = true;
+};
+
+const saveEdit = async () => {
+  try {
+    await api.put(`/admin/mapping/${editingItem.id}`, editingItem);
+    snackbar.message = 'แก้ไขสำเร็จ'; snackbar.color = 'success'; snackbar.show = true;
+    editDialog.value = false;
+    await fetchMappings();
+  } catch (error) {
+    snackbar.message = error.response?.data?.message || 'แก้ไขไม่สำเร็จ'; 
+    snackbar.color = 'error'; 
+    snackbar.show = true;
+  }
+};
+
+// [NEW] Delete Functions
+const confirmDelete = (item) => {
+  itemToDelete.value = item;
+  deleteDialog.value = true;
+};
+
+const submitDelete = async () => {
+  if (!itemToDelete.value) return;
+  try {
+    await api.delete(`/admin/mapping/${itemToDelete.value.id}`);
+    snackbar.message = 'ลบสำเร็จ'; snackbar.color = 'success'; snackbar.show = true;
+    deleteDialog.value = false;
+    await fetchMappings();
+  } catch (error) {
+    snackbar.message = 'ลบไม่สำเร็จ'; snackbar.color = 'error'; snackbar.show = true;
+  }
 };
 </script>

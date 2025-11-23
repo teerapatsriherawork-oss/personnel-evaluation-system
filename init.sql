@@ -56,7 +56,7 @@ CREATE TABLE IF NOT EXISTS criterias (
 ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- ==========================================
--- 5. ตาราง Mapping กรรมการ (สำคัญ: เพิ่ม UNIQUE)
+-- 5. ตาราง Mapping กรรมการ
 -- ==========================================
 CREATE TABLE IF NOT EXISTS committees_mapping (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -69,12 +69,11 @@ CREATE TABLE IF NOT EXISTS committees_mapping (
     FOREIGN KEY (evaluator_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (evaluatee_id) REFERENCES users(id) ON DELETE CASCADE,
 
-    -- [NEW] ป้องกันการจับคู่ซ้ำ: ใน 1 รอบ กรรมการ 1 คน จะคู่กับผู้รับการประเมิน 1 คนได้ครั้งเดียว
     UNIQUE KEY unique_mapping (round_id, evaluator_id, evaluatee_id)
 ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- ==========================================
--- 6. ตาราง Evaluations (ผลประเมิน) (สำคัญ: เพิ่ม UNIQUE)
+-- 6. ตาราง Evaluations (ผลประเมิน)
 -- ==========================================
 CREATE TABLE IF NOT EXISTS evaluations (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -93,24 +92,12 @@ CREATE TABLE IF NOT EXISTS evaluations (
     FOREIGN KEY (evaluatee_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (evaluator_id) REFERENCES users(id) ON DELETE SET NULL,
 
-    -- [NEW] ป้องกันคะแนนซ้ำ: 1 ข้อเกณฑ์ ต่อ 1 คู่ประเมิน มีได้คะแนนเดียว
     UNIQUE KEY unique_evaluation (round_id, criteria_id, evaluatee_id, evaluator_id)
 ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- ==========================================
 -- 7. Seed Data (ข้อมูลเริ่มต้น)
 -- ==========================================
--- เพิ่ม Admin: user=admin, pass=123456
--- (Hash bcrypt ของ 123456 คือ $2a$10$TwL/yq/j/v... แต่ในที่นี้ใช้ hash จริงเพื่อให้ login ได้เลย)
--- หมายเหตุ: หากต้องการเปลี่ยนรหัสผ่าน ให้ทำผ่านหน้าเว็บหลังจากระบบรันแล้ว
-
+-- Hash นี้คือ '123456' (Generate จาก bcryptjs)
 INSERT INTO users (username, password_hash, fullname, role) VALUES 
-('admin', '$2a$10$E2.6.123456.HASH.PLACEHOLDER.CHANGE.ME', 'System Administrator', 'admin');
--- หมายเหตุ: ในการใช้งานจริง คุณควร Generate Hash ใหม่จาก Backend แต่เพื่อให้ระบบรันได้
--- ผมแนะนำให้คุณใช้ User ที่คุณ Create ผ่านหน้า Register หรือใช้ User Admin เดิมที่คุณมีอยู่แล้ว
--- หากต้องการ Default Admin ที่ Login ได้เลยต้องใช้ Hash ที่ถูกต้องครับ
--- ตัวอย่าง Hash ของ "123456": $2a$10$Xk/y... (ขึ้นอยู่กับ Salt)
--- **แนะนำ**: ลบส่วน INSERT นี้ออก แล้วไปสมัครสมาชิกใหม่ผ่านหน้าเว็บเป็น Admin คนแรกจะปลอดภัยกว่าครับ
--- หรือใช้คำสั่งนี้ถ้าต้องการ Admin ชั่วคราว (Password: 123456)
--- INSERT INTO users (username, password_hash, fullname, role) VALUES 
--- ('admin', '$2a$10$y8.1.2.3.4.5.6.HASH_HERE', 'Admin Default', 'admin');
+('admin', '$2a$10$8.UnVuG9HHgffUDAlk8qfOuVGkqRzgVymGe07xd00DMxs.AQiy38a', 'System Administrator', 'admin');
