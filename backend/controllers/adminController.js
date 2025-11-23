@@ -1,6 +1,9 @@
 const db = require('../config/database');
+const bcrypt = require('bcryptjs'); // ต้องติดตั้ง: npm install bcryptjs
 
-// [5.1.2] CRUD Rounds (จัดการรอบการประเมิน)
+// ==========================================
+// 1. ส่วนจัดการ Rounds (รอบการประเมิน)
+// ==========================================
 exports.createRound = async (req, res) => {
     try {
         const { round_name, start_date, end_date } = req.body;
@@ -27,7 +30,7 @@ exports.getAllRounds = async (req, res) => {
 exports.updateRoundStatus = async (req, res) => {
     try {
         const { id } = req.params;
-        const { status } = req.body; // 'open' or 'closed'
+        const { status } = req.body;
         await db.execute('UPDATE rounds SET status = ? WHERE id = ?', [status, id]);
         res.status(200).json({ status: 'success', message: 'Round status updated' });
     } catch (error) {
@@ -35,11 +38,12 @@ exports.updateRoundStatus = async (req, res) => {
     }
 };
 
-// [NEW] Topics (จัดการหัวข้อ)
+// ==========================================
+// 2. ส่วนจัดการ Topics (หัวข้อ)
+// ==========================================
 exports.createTopic = async (req, res) => {
     try {
         const { round_id, topic_name } = req.body;
-        // บันทึกลงตาราง topics
         const [result] = await db.execute(
             'INSERT INTO topics (round_id, topic_name) VALUES (?, ?)',
             [round_id, topic_name]
@@ -61,19 +65,20 @@ exports.getTopicsByRound = async (req, res) => {
     }
 };
 
-// [5.1.1, 5.1.3] CRUD Criterias (จัดการตัวชี้วัด)
+// ==========================================
+// 3. ส่วนจัดการ Criterias (ตัวชี้วัด)
+// ==========================================
 exports.createCriteria = async (req, res) => {
     try {
-        // แก้ไข: เพิ่มค่า default ให้ description = null เพื่อป้องกัน Error undefined
-        const { round_id, topic_id, indicator_name, description = null, max_score, scoring_type } = req.body;
+        const { round_id, topic_id, indicator_name, description = null, max_score, scoring_type, require_evidence = false } = req.body;
         
         const [result] = await db.execute(
-            'INSERT INTO criterias (round_id, topic_id, indicator_name, description, max_score, scoring_type) VALUES (?, ?, ?, ?, ?, ?)',
-            [round_id, topic_id, indicator_name, description, max_score, scoring_type]
+            'INSERT INTO criterias (round_id, topic_id, indicator_name, description, max_score, scoring_type, require_evidence) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [round_id, topic_id, indicator_name, description, max_score, scoring_type, require_evidence]
         );
         res.status(201).json({ status: 'success', message: 'Criteria created', data: { id: result.insertId } });
     } catch (error) {
-        console.error("Error creating criteria:", error); // Log Error
+        console.error("Error creating criteria:", error);
         res.status(500).json({ status: 'error', message: error.message });
     }
 };
@@ -81,7 +86,6 @@ exports.createCriteria = async (req, res) => {
 exports.getCriteriasByRound = async (req, res) => {
     try {
         const { roundId } = req.params;
-        // JOIN ตาราง topics เพื่อเอา topic_name กลับมาแสดงให้ Frontend เห็น
         const sql = `
             SELECT c.*, t.topic_name 
             FROM criterias c
@@ -95,17 +99,78 @@ exports.getCriteriasByRound = async (req, res) => {
     }
 };
 
-// [5.1.6] Manage Users (Simple Get All for admin selection)
+// ==========================================
+// 4. ส่วนจัดการ Users (ผู้ใช้งาน)
+// ==========================================
 exports.getAllUsers = async (req, res) => {
     try {
-        const [users] = await db.execute('SELECT id, username, fullname, role FROM users');
+        const [users] = await db.execute('SELECT id, username, fullname, role FROM users ORDER BY id DESC');
         res.status(200).json({ status: 'success', data: users });
     } catch (error) {
         res.status(500).json({ status: 'error', message: error.message });
     }
 };
 
-// [5.1.7, 5.1.8] Mapping Committee -> Evaluatee
+exports.createUser = async (req, res) => {
+    try {
+        const { username, password, fullname, role } = req.body;
+        
+        // ป้องกัน Error ข้อมูลไม่ครบ
+        if(!username || !password || !fullname || !role) {
+             return res.status(400).json({ status: 'error', message: 'กรุณากรอกข้อมูลให้ครบถ้วน' });
+        }
+
+        const salt = await bcrypt.genSalt(10);
+        const hash = await bcrypt.hash(password, salt);
+
+        const [result] = await db.execute(
+            'INSERT INTO users (username, password_hash, fullname, role) VALUES (?, ?, ?, ?)',
+            [username, hash, fullname, role]
+        );
+        res.status(201).json({ status: 'success', message: 'User created', data: { id: result.insertId } });
+    } catch (error) {
+        console.error("Create User Error:", error);
+        res.status(500).json({ status: 'error', message: error.message });
+    }
+};
+
+exports.updateUser = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { username, fullname, role, password } = req.body;
+
+        if (password && password.trim() !== '') {
+            const salt = await bcrypt.genSalt(10);
+            const hash = await bcrypt.hash(password, salt);
+            await db.execute(
+                'UPDATE users SET username=?, fullname=?, role=?, password_hash=? WHERE id=?',
+                [username, fullname, role, hash, id]
+            );
+        } else {
+            await db.execute(
+                'UPDATE users SET username=?, fullname=?, role=? WHERE id=?',
+                [username, fullname, role, id]
+            );
+        }
+        res.status(200).json({ status: 'success', message: 'User updated' });
+    } catch (error) {
+        res.status(500).json({ status: 'error', message: error.message });
+    }
+};
+
+exports.deleteUser = async (req, res) => {
+    try {
+        const { id } = req.params;
+        await db.execute('DELETE FROM users WHERE id=?', [id]);
+        res.status(200).json({ status: 'success', message: 'User deleted' });
+    } catch (error) {
+        res.status(500).json({ status: 'error', message: error.message });
+    }
+};
+
+// ==========================================
+// 5. ส่วนอื่นๆ (Mapping, Dashboard)
+// ==========================================
 exports.assignCommittee = async (req, res) => {
     try {
         const { round_id, evaluator_id, evaluatee_id, role } = req.body;
@@ -119,7 +184,6 @@ exports.assignCommittee = async (req, res) => {
     }
 };
 
-// [5.1.11] Dashboard Stats
 exports.getDashboardStats = async (req, res) => {
     try {
         const [userCount] = await db.execute('SELECT COUNT(*) as total FROM users');

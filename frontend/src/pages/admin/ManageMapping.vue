@@ -137,9 +137,9 @@ onMounted(async () => {
   }
 });
 
-// Filter Lists
-const users = computed(() => allUsers.value.filter(u => u.role === 'user' || u.role === 'admin'));
-const committees = computed(() => allUsers.value.filter(u => u.role === 'committee' || u.role === 'admin'));
+// Filter Lists (แก้ไขตรงนี้: เอา role === 'admin' ออก)
+const users = computed(() => allUsers.value.filter(u => u.role === 'user'));
+const committees = computed(() => allUsers.value.filter(u => u.role === 'committee'));
 
 const submitMapping = async () => {
   if (!formData.round_id || !formData.evaluator_id || !formData.evaluatee_id) {

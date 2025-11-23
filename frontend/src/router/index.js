@@ -1,27 +1,24 @@
-// [2] Route Guard (check login/role)
 // src/router/index.js
 
 import { createRouter, createWebHistory } from 'vue-router';
 import { useAuthStore } from '../stores/authStore';
 
-// Layout
 import MainLayout from '../layouts/MainLayout.vue';
-
-// Pages
 import Login from '../pages/Login.vue';
 import Register from '../pages/Register.vue';
 
-// Admin Pages (Lazy load)
+// Admin Pages
 const Dashboard = () => import('../pages/admin/Dashboard.vue');
 const ManageCriteria = () => import('../pages/admin/ManageCriteria.vue');
 const ManageMapping = () => import('../pages/admin/ManageMapping.vue');
 const ManageRounds = () => import('../pages/admin/ManageRounds.vue');
+const ManageUsers = () => import('../pages/admin/ManageUsers.vue'); // [NEW] Import
 
-// User Pages (Lazy load)
+// User Pages
 const SelfAssessment = () => import('../pages/user/SelfAssessment.vue');
 const MyReport = () => import('../pages/user/MyReport.vue');
 
-// Committee Pages (Lazy load)
+// Committee Pages
 const EvaluationList = () => import('../pages/committee/EvaluationList.vue');
 const Grading = () => import('../pages/committee/Grading.vue');
 
@@ -39,12 +36,11 @@ const routes = [
     meta: { requiresAuth: false }
   },
   {
-    // [3.1] Main Layout
     path: '/',
     component: MainLayout,
-    meta: { requiresAuth: true }, // ทุกหน้าใน Layout นี้ต้อง Login
+    meta: { requiresAuth: true },
     children: [
-      // Admin Routes [3.2]
+      // Admin Routes
       {
         path: 'dashboard',
         component: Dashboard,
@@ -65,8 +61,13 @@ const routes = [
         component: ManageMapping,
         meta: { roles: ['admin'] }
       },
+      {
+        path: 'manage-users', // [NEW] Route
+        component: ManageUsers,
+        meta: { roles: ['admin'] }
+      },
 
-      // User Routes [3.2]
+      // User Routes
       {
         path: 'self-assessment',
         component: SelfAssessment,
@@ -78,7 +79,7 @@ const routes = [
         meta: { roles: ['user'] }
       },
       
-      // Committee Routes [3.2]
+      // Committee Routes
       {
         path: 'evaluation-list',
         component: EvaluationList,
@@ -90,7 +91,6 @@ const routes = [
         meta: { roles: ['committee'] }
       },
       
-      // Redirect root path to role-specific dashboard
       {
         path: '',
         redirect: () => {
@@ -110,7 +110,6 @@ const router = createRouter({
   routes,
 });
 
-// Route Guard
 router.beforeEach((to, from, next) => {
   const authStore = useAuthStore();
   const isAuthenticated = authStore.isAuthenticated;
@@ -118,23 +117,18 @@ router.beforeEach((to, from, next) => {
   const requiredRoles = to.meta.roles;
 
   if (requiresAuth && !isAuthenticated) {
-    // 1. ถ้าหน้าต้อง Login แต่ยังไม่ได้ Login
     next('/login');
   } else if (!requiresAuth && isAuthenticated && (to.path === '/login' || to.path === '/register')) {
-    // 2. ถ้า Login แล้ว แต่พยายามเข้าหน้า Login/Register
-    next('/'); // Redirect ไปหน้า Dashboard
+    next('/');
   } else if (isAuthenticated && requiredRoles) {
-    // 3. ถ้า Login แล้ว และหน้านี้ต้องการ Role
     if (requiredRoles.includes(authStore.user.role)) {
-      next(); // [3.2] ผ่าน (Role ตรง)
+      next();
     } else {
-      next('/'); // [3.E] ไม่ผ่าน (Role ไม่ตรง)
+      next('/');
     }
   } else {
-    // 4. กรณีอื่นๆ (เช่น หน้า Public หรือหน้า Auth ที่ไม่ต้องเช็ค Role)
     next();
   }
 });
 
 export default router;
-

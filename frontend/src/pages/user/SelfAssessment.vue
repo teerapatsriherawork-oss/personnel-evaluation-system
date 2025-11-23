@@ -46,6 +46,9 @@
                 <div class="text-caption text-grey">
                   {{ criteria.indicator_name }}
                 </div>
+                <div v-if="criteria.description" class="text-caption text-grey-darken-1 mt-1">
+                  ({{ criteria.description }})
+                </div>
               </v-col>
               <v-col cols="4" class="text-right text-caption text-primary">
                 (คะแนนเต็ม: {{ criteria.max_score }})
@@ -60,14 +63,15 @@
             <v-divider class="mb-4"></v-divider>
             <v-form @submit.prevent="submitItem(criteria)">
               <v-row>
-                <v-col cols="12" md="6">
+                <v-col cols="12" md="7">
                   <v-label class="mb-2 font-weight-bold">คะแนนประเมินตนเอง</v-label>
+                  
                   <div v-if="criteria.scoring_type === 'scale'">
-                    <v-radio-group v-model="formModels[criteria.id].score" inline>
-                      <v-radio label="1 (ต่ำมาก)" :value="1"></v-radio>
-                      <v-radio label="2 (ต่ำ)" :value="2"></v-radio>
-                      <v-radio label="3 (ตามเกณฑ์)" :value="3"></v-radio>
-                      <v-radio label="4 (สูงกว่า)" :value="4"></v-radio>
+                    <v-radio-group v-model="formModels[criteria.id].score">
+                      <v-radio label="1 - ปฏิบัติได้ต่ำกว่าระดับการปฏิบัติที่คาดหวังมาก" :value="1"></v-radio>
+                      <v-radio label="2 - ปฏิบัติได้ต่ำกว่าระดับการปฏิบัติที่คาดหวัง" :value="2"></v-radio>
+                      <v-radio label="3 - ปฏิบัติได้ตามระดับการปฏิบัติที่คาดหวัง" :value="3"></v-radio>
+                      <v-radio label="4 - ปฏิบัติได้สูงกว่าระดับการปฏิบัติที่คาดหวัง" :value="4"></v-radio>
                     </v-radio-group>
                   </div>
                   <div v-else>
@@ -82,11 +86,11 @@
                   </div>
                 </v-col>
 
-                <v-col cols="12" md="6">
+                <v-col cols="12" md="5">
                   <v-label class="mb-2">ความคิดเห็นเพิ่มเติม / เหตุผลประกอบ</v-label>
                   <v-textarea
                     v-model="formModels[criteria.id].comment"
-                    rows="2"
+                    rows="4"
                     variant="outlined"
                     placeholder="ระบุเหตุผล..."
                     density="compact"
@@ -97,7 +101,8 @@
               <v-sheet color="grey-lighten-4" class="pa-4 rounded mb-4">
                 <div class="text-subtitle-2 mb-2">
                   <v-icon size="small" start>mdi-paperclip</v-icon>
-                  หลักฐานประกอบ (Evidence) [5.2.5]
+                  หลักฐานประกอบ (Evidence)
+                  <span v-if="criteria.require_evidence" class="text-error text-caption font-weight-bold ml-2">* จำเป็นต้องแนบ</span>
                 </div>
                 <v-row>
                   <v-col cols="12" md="6">
@@ -187,7 +192,7 @@ const fetchCriterias = async () => {
     const criRes = await api.get(`/admin/rounds/${selectedRoundId.value}/criterias`);
     const fetchedCriterias = criRes.data.data;
 
-    // 2. Get Existing Evaluations (To pre-fill data)
+    // 2. Get Existing Evaluations
     const evalRes = await api.get(`/user/evaluations/${selectedRoundId.value}`);
     const myEvals = evalRes.data.data || [];
 
@@ -195,12 +200,11 @@ const fetchCriterias = async () => {
     criterias.value = fetchedCriterias.map(c => {
       const existing = myEvals.find(e => e.criteria_id === c.id);
       
-      // Setup Model for this criteria
       formModels[c.id] = {
         score: existing ? Number(existing.score) : 0,
         comment: existing?.comment || '',
         evidence_url: existing?.evidence_url || '',
-        evidence_file: existing?.evidence_file || '' // Store path string
+        evidence_file: existing?.evidence_file || ''
       };
 
       return {
@@ -227,8 +231,7 @@ const submitItem = async (criteria) => {
     let filePath = formModels[cId].evidence_file;
 
     // Step 1: Upload File if selected
-    const file = fileInputs[cId]; // Get file from array (Vuetify 3 file input returns array usually, or single obj depending on prop)
-    // Vuetify 3 v-file-input model is an array
+    const file = fileInputs[cId]; 
     if (file && file.length > 0) {
       const formData = new FormData();
       formData.append('file', file[0]);
@@ -238,7 +241,7 @@ const submitItem = async (criteria) => {
       });
       
       if (uploadRes.data.status === 'success') {
-        filePath = uploadRes.data.data.path; // Update path
+        filePath = uploadRes.data.data.path;
       }
     }
 
@@ -254,9 +257,8 @@ const submitItem = async (criteria) => {
 
     await api.post('/user/evaluate', payload);
 
-    // Update UI state
     criteria.isSubmitted = true;
-    formModels[cId].evidence_file = filePath; // Keep latest path
+    formModels[cId].evidence_file = filePath;
     
     snackbar.message = 'บันทึกสำเร็จ';
     snackbar.color = 'success';

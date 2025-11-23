@@ -77,13 +77,22 @@
                   :rules="[v => !!v || 'กรุณาเลือกหัวข้อ']"
                 ></v-select>
 
-                <v-textarea
+                <v-text-field
                   v-model="criteriaForm.indicator_name"
                   label="ตัวชี้วัด (Indicator)"
                   placeholder="รายละเอียดสิ่งที่ต้องการวัด..."
                   variant="outlined"
-                  rows="2"
+                  density="compact"
                   required
+                ></v-text-field>
+
+                <v-textarea
+                  v-model="criteriaForm.description"
+                  label="รายละเอียดเกณฑ์ (Description)"
+                  placeholder="อธิบายรายละเอียดของเกณฑ์นี้..."
+                  variant="outlined"
+                  rows="2"
+                  density="compact"
                 ></v-textarea>
 
                 <v-row>
@@ -93,6 +102,7 @@
                       label="คะแนนเต็ม"
                       type="number"
                       variant="outlined"
+                      density="compact"
                       required
                     ></v-text-field>
                   </v-col>
@@ -102,9 +112,34 @@
                       label="รูปแบบคะแนน"
                       :items="[{title:'Scale 1-4', value:'scale'}, {title:'Boolean (มี/ไม่มี)', value:'boolean'}]"
                       variant="outlined"
+                      density="compact"
                     ></v-select>
                   </v-col>
                 </v-row>
+
+                <v-alert
+                  v-if="criteriaForm.scoring_type === 'scale'"
+                  type="info"
+                  variant="tonal"
+                  class="mt-2 mb-4 text-caption"
+                  border="start"
+                >
+                  <div class="font-weight-bold mb-1">เกณฑ์คะแนนแบบสเกล 1-4:</div>
+                  <ul class="pl-4">
+                    <li><strong>1 :</strong> ปฏิบัติได้ต่ำกว่าระดับการปฏิบัติที่คาดหวังมาก</li>
+                    <li><strong>2 :</strong> ปฏิบัติได้ต่ำกว่าระดับการปฏิบัติที่คาดหวัง</li>
+                    <li><strong>3 :</strong> ปฏิบัติได้ตามระดับการปฏิบัติที่คาดหวัง</li>
+                    <li><strong>4 :</strong> ปฏิบัติได้สูงกว่าระดับการปฏิบัติที่คาดหวัง</li>
+                  </ul>
+                </v-alert>
+
+                <v-checkbox
+                  v-model="criteriaForm.require_evidence"
+                  label="จำเป็นต้องแนบหลักฐาน (Require Evidence)"
+                  color="primary"
+                  hide-details
+                  class="mb-4"
+                ></v-checkbox>
 
                 <v-btn type="submit" color="success" block :loading="criLoading">
                   บันทึกตัวชี้วัด
@@ -121,16 +156,24 @@
                   <th>หัวข้อ</th>
                   <th>ตัวชี้วัด</th>
                   <th>คะแนน</th>
+                  <th>หลักฐาน</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="item in criteriaList" :key="item.id">
                   <td class="font-weight-bold text-secondary">{{ item.topic_name }}</td>
-                  <td>{{ item.indicator_name }}</td>
+                  <td>
+                    <div>{{ item.indicator_name }}</div>
+                    <div class="text-caption text-grey">{{ item.description }}</div>
+                  </td>
                   <td>{{ item.max_score }}</td>
+                  <td>
+                    <v-icon v-if="item.require_evidence" color="error" size="small">mdi-paperclip</v-icon>
+                    <span v-else class="text-grey">-</span>
+                  </td>
                 </tr>
                 <tr v-if="criteriaList.length === 0">
-                  <td colspan="3" class="text-center text-grey">ยังไม่มีข้อมูล</td>
+                  <td colspan="4" class="text-center text-grey">ยังไม่มีข้อมูล</td>
                 </tr>
               </tbody>
             </v-table>
@@ -162,8 +205,10 @@ const topicForm = reactive({ topic_name: '' });
 const criteriaForm = reactive({
   topic_id: null,
   indicator_name: '',
+  description: '',
   max_score: 10,
-  scoring_type: 'scale'
+  scoring_type: 'scale',
+  require_evidence: false
 });
 
 onMounted(async () => {
@@ -173,7 +218,6 @@ onMounted(async () => {
   } catch (error) { console.error(error); }
 });
 
-// เมื่อเลือกรอบ -> โหลด Topic และ Criteria
 watch(selectedRoundId, async (newId) => {
   if (newId) {
     await fetchTopics(newId);
@@ -195,7 +239,6 @@ const fetchCriterias = async (roundId) => {
   } catch (error) { console.error(error); }
 };
 
-// สร้าง Topic
 const createTopic = async () => {
   if (!topicForm.topic_name) return;
   topicLoading.value = true;
@@ -217,7 +260,6 @@ const createTopic = async () => {
   }
 };
 
-// สร้าง Criteria
 const createCriteria = async () => {
   if (!criteriaForm.topic_id || !criteriaForm.indicator_name) {
     snackbar.message = 'กรุณากรอกข้อมูลให้ครบ';
@@ -235,8 +277,10 @@ const createCriteria = async () => {
     snackbar.color = 'success';
     snackbar.show = true;
     
+    // Reset fields partially
     criteriaForm.indicator_name = '';
-    // ไม่ Reset topic_id เพื่อให้ user เพิ่มข้อต่อไปในหัวข้อเดิมได้เลย สะดวกกว่า
+    criteriaForm.description = '';
+    criteriaForm.require_evidence = false;
     await fetchCriterias(selectedRoundId.value);
   } catch (error) {
     snackbar.message = 'เกิดข้อผิดพลาด';

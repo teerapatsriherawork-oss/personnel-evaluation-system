@@ -12,6 +12,16 @@
       </v-col>
     </v-row>
 
+    <v-alert type="info" variant="tonal" class="mb-4" icon="mdi-information">
+      <v-alert-title class="text-subtitle-1 font-weight-bold">เกณฑ์การให้คะแนน (Scale 1-4)</v-alert-title>
+      <v-row dense class="text-body-2 mt-1">
+        <v-col cols="12" md="6"><strong>1 :</strong> ปฏิบัติได้ต่ำกว่าระดับการปฏิบัติที่คาดหวังมาก</v-col>
+        <v-col cols="12" md="6"><strong>2 :</strong> ปฏิบัติได้ต่ำกว่าระดับการปฏิบัติที่คาดหวัง</v-col>
+        <v-col cols="12" md="6"><strong>3 :</strong> ปฏิบัติได้ตามระดับการปฏิบัติที่คาดหวัง</v-col>
+        <v-col cols="12" md="6"><strong>4 :</strong> ปฏิบัติได้สูงกว่าระดับการปฏิบัติที่คาดหวัง</v-col>
+      </v-row>
+    </v-alert>
+
     <div v-if="loading" class="text-center py-5">
       <v-progress-circular indeterminate color="primary" size="64"></v-progress-circular>
       <div class="mt-3">กำลังโหลดเกณฑ์และข้อมูล...</div>
@@ -31,6 +41,9 @@
             <td class="py-3">
               <div class="font-weight-bold">{{ c.topic_name }}</div>
               <div class="text-caption text-grey-darken-1">{{ c.indicator_name }}</div>
+              <div v-if="c.description" class="text-caption text-grey font-italic mt-1">
+                ({{ c.description }})
+              </div>
             </td>
             
             <td class="text-center">
@@ -145,13 +158,10 @@ onMounted(async () => {
 const fetchData = async () => {
   loading.value = true;
   try {
-    // เรียก API เส้นเดียว ได้ครบทั้งเกณฑ์และคะแนน
     const res = await api.get(`/committee/grading/${roundId.value}/${evaluateeId.value}`);
     const fetchedData = res.data.data;
     
-    // Map ข้อมูลเข้าตัวแปร state
     criterias.value = fetchedData.map(c => {
-      // Init form model สำหรับกรรมการ (ใช้คะแนนเดิมถ้ามี)
       formModels[c.id] = {
         score: Number(c.my_score) || 0,
         comment: c.my_comment || '',
@@ -176,7 +186,6 @@ const handleSubmitGrading = async () => {
   try {
     let signaturePath = null;
     
-    // 1. Upload Signature File (if exists)
     if (signatureFile.value.length > 0) {
       const file = signatureFile.value[0];
       const formData = new FormData();
@@ -188,7 +197,6 @@ const handleSubmitGrading = async () => {
       signaturePath = uploadRes.data.data.path;
     }
     
-    // 2. Prepare all API calls
     const submissionPromises = [];
     
     for (const c of criterias.value) {
@@ -200,7 +208,6 @@ const handleSubmitGrading = async () => {
         comment: formModels[c.id].comment,
       };
       
-      // Attach the global signature to the first item (or all, handled by backend)
       if (c.id === criterias.value[0].id && signaturePath) {
         payload.evidence_file = signaturePath;
       }
@@ -208,14 +215,12 @@ const handleSubmitGrading = async () => {
       submissionPromises.push(api.post('/committee/grade', payload));
     }
     
-    // 3. Execute all submissions
     await Promise.all(submissionPromises);
     
     snackbar.message = 'ส่งผลการประเมินเรียบร้อยแล้ว';
     snackbar.color = 'success';
     snackbar.show = true;
     
-    // Redirect back to list
     setTimeout(() => {
       router.push('/evaluation-list');
     }, 1500);
