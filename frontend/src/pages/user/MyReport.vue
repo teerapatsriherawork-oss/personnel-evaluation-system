@@ -151,11 +151,10 @@ const fetchReport = async () => {
     const criterias = criRes.data.data;
 
     // 2. Get My Evaluations (Self + Committee)
-    // API /user/evaluations/:roundId ถูกออกแบบให้คืนผลประเมินทั้งหมดที่เราเป็น Evaluatee
     const evalRes = await api.get(`/user/evaluations/${selectedRoundId.value}`);
     const selfEvals = evalRes.data.data;
     
-    // [FIX LOGIC] ปรับ Logic การรวมคะแนนกรรมการ
+    // [FIXED] ปรับ Logic การรวมคะแนนกรรมการให้เป็นค่าเฉลี่ย
     reportData.value = criterias.map(c => {
       // 1. ดึงคะแนนประเมินตนเอง
       const myEval = selfEvals.find(e => e.criteria_id === c.id && e.evaluator_id === userProfile.id);

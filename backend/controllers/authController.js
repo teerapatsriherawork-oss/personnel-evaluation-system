@@ -5,6 +5,7 @@ require('dotenv').config({ path: '../.env' });
 
 exports.register = async (req, res) => {
     try {
+        // ตรวจสอบว่า req.body มีข้อมูลครบหรือไม่ (แก้ปัญหา destructure property of undefined)
         const { username, password, fullname, role } = req.body;
 
         // 1. เช็คว่ากรอกครบไหม
@@ -40,7 +41,7 @@ exports.register = async (req, res) => {
             data: { userId: result.insertId }
         });
 
-    } catch (error) { // ✅ แก้ไขให้ถูกต้อง
+    } catch (error) { 
         console.error("Register Error Details:", error);
         res.status(500).json({ 
             status: 'error', 
@@ -83,7 +84,7 @@ exports.login = async (req, res) => {
                 user: { id: user.id, username: user.username, role: user.role, fullname: user.fullname }
             }
         });
-    } catch (error) { // ✅ แก้ไขให้ถูกต้อง
+    } catch (error) { 
         console.error("Login Error Details:", error);
         res.status(500).json({ status: 'error', message: error.message });
     }

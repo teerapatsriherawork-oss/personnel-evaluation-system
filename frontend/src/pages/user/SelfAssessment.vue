@@ -271,7 +271,7 @@ const submitItem = async (criteria) => {
       const formData = new FormData();
       formData.append('file', file[0]);
       
-      // [FIX สำคัญ] แก้บั๊ก Content-Type โดยการกำหนด headers เพื่อให้รองรับ multipart/form-data
+      // [FIXED] กำหนด headers ให้เป็น multipart/form-data เพื่อ override ค่าเริ่มต้น (JSON)
       const uploadRes = await api.post('/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' } 
       });

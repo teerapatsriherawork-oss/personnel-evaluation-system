@@ -3,7 +3,7 @@
 const express = require('express');
 const router = express.Router();
 
-// [FIX สำคัญ: ลบ Body Parsers ที่ขัดแย้งกับ Multer ออก]
+// [FIXED] ลบ Global Body Parsers ออก เพราะจะทำให้ Multer (Upload) ล้มเหลว
 // router.use(express.json()); 
 // router.use(express.urlencoded({ extended: true }));
 
@@ -57,8 +57,8 @@ router.delete('/admin/users/:id', authMiddleware, adminController.deleteUser);
 // Mapping Routes (UPDATED)
 router.get('/admin/mappings', authMiddleware, adminController.getAllMappings);
 router.post('/admin/mapping', authMiddleware, adminController.assignCommittee);
-router.put('/admin/mapping/:id', authMiddleware, adminController.updateMapping); // [NEW]
-router.delete('/admin/mapping/:id', authMiddleware, adminController.deleteMapping); // [NEW]
+router.put('/admin/mapping/:id', authMiddleware, adminController.updateMapping); 
+router.delete('/admin/mapping/:id', authMiddleware, adminController.deleteMapping); 
 
 router.get('/admin/stats', authMiddleware, adminController.getDashboardStats);
 router.get('/admin/summary/:roundId', authMiddleware, adminController.getCommitteeSummary);
