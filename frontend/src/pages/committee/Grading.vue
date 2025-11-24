@@ -218,8 +218,8 @@ const fetchData = async () => {
     criterias.value = res.data.data;
     
     // [UPDATED] หาจาก field 'committee_signature' ที่ Backend ส่งมา
-    if (criterias.value.length > 0 && criterias.value[0].committee_signature) {
-      existingSignature.value = criterias.value[0].committee_signature;
+    if (criterias.value.length > 0 && criterias.value[0].profile_signature) {
+      existingSignature.value = criterias.value[0].profile_signature;
     }
 
     criterias.value.forEach(c => {

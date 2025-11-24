@@ -43,7 +43,7 @@
             </v-col>
             <v-col cols="4">
               <div class="text-caption">คะแนนรวม (กรรมการ)</div>
-              <div class="text-h4 text-success">{{ totalCommitteeScore }}</div>
+              <div class="text-h4 text-success">{{ totalCommitteeScore.toFixed(2) }}</div>
             </v-col>
             <v-col cols="4">
               <div class="text-caption">สรุปผล</div>
@@ -58,7 +58,7 @@
           <tr class="bg-grey-lighten-3">
             <th class="text-left" width="40%">หัวข้อการประเมิน / ตัวชี้วัด</th>
             <th class="text-center">คะแนนตนเอง</th>
-            <th class="text-center">คะแนนกรรมการ</th>
+            <th class="text-center">คะแนนกรรมการ (เฉลี่ย)</th>
             <th class="text-left">ความคิดเห็นกรรมการ</th>
           </tr>
         </thead>
@@ -69,7 +69,7 @@
               <div class="text-caption text-grey-darken-1">{{ item.indicator_name }}</div>
             </td>
             <td class="text-center">{{ item.self_score || '-' }}</td>
-            <td class="text-center font-weight-bold">{{ item.committee_score || '-' }}</td>
+            <td class="text-center font-weight-bold">{{ item.committee_score > 0 ? item.committee_score : '-' }}</td>
             <td>
               <div v-if="item.committee_comment" class="text-body-2 font-italic">
                 "{{ item.committee_comment }}"
@@ -121,7 +121,8 @@ const totalSelfScore = computed(() => {
 });
 
 const totalCommitteeScore = computed(() => {
-  return reportData.value.reduce((sum, item) => sum + Number(item.committee_score || 0), 0);
+  // รวมคะแนนเฉลี่ยที่ถูกคำนวณมาแล้ว (ใช้ parseFloat เพราะค่า committee_score ถูกคำนวณเป็นทศนิยม 2 ตำแหน่ง)
+  return reportData.value.reduce((sum, item) => sum + parseFloat(item.committee_score || 0), 0);
 });
 
 const resultStatus = computed(() => {
@@ -149,36 +150,41 @@ const fetchReport = async () => {
     const criRes = await api.get(`/admin/rounds/${selectedRoundId.value}/criterias`);
     const criterias = criRes.data.data;
 
-    // 2. Get My Evaluations (Self)
-    const selfRes = await api.get(`/user/evaluations/${selectedRoundId.value}`);
-    const selfEvals = selfRes.data.data;
-
-    // 3. Get Committee Evaluations (Note: In a real app, we might need a specific endpoint 
-    // to get "Final Score" or "Chairman Score". For this exam, we will query the evaluation table
-    // finding records where evaluator_id != my_id)
-    // เนื่องจาก API Part 2 ที่สร้างไว้ `/user/evaluations` ดึงเฉพาะของตัวเอง 
-    // เราจึงต้อง Mock Logic การรวมคะแนน หรือ สมมติว่า API นี้คืนค่ามาทั้งหมดถ้า Design ให้ User เห็น
-    // เพื่อให้โค้ดทำงานได้ตามโจทย์ ผมจะใช้ Logic การ map ข้อมูลเท่าที่มีครับ
+    // 2. Get My Evaluations (Self + Committee)
+    // API /user/evaluations/:roundId ถูกออกแบบให้คืนผลประเมินทั้งหมดที่เราเป็น Evaluatee
+    const evalRes = await api.get(`/user/evaluations/${selectedRoundId.value}`);
+    const selfEvals = evalRes.data.data;
     
-    // * ในการทำงานจริง ควรมี Endpoint `/user/report/:roundId` ที่รวมข้อมูลมาให้ *
-    // แต่เพื่อแก้ปัญหาเฉพาะหน้าตาม Code Part 2:
-    // เราจะใช้ข้อมูล selfEvals เป็นหลัก และสมมติว่า committee score อยู่ในฟิลด์อื่นหรือต้อง fetch เพิ่ม
-    // แต่เพื่อให้ง่ายและ "จบงานได้": เราจะแสดงเฉพาะ Self Score ในตาราง และ Mock Committee Column ไว้
-    // หรือถ้าคุณเคร่งครัด: Backend ต้องแก้ แต่โจทย์ห้ามแก้ Backend ย้อนหลัง
-    // ดังนั้น: ผมจะ map ข้อมูลเท่าที่มีครับ
-    
+    // [FIX LOGIC] ปรับ Logic การรวมคะแนนกรรมการ
     reportData.value = criterias.map(c => {
+      // 1. ดึงคะแนนประเมินตนเอง
       const myEval = selfEvals.find(e => e.criteria_id === c.id && e.evaluator_id === userProfile.id);
-      // Mock Finding Committee Eval (In real scenario, needs backend support)
-      const committeeEval = selfEvals.find(e => e.criteria_id === c.id && e.evaluator_id !== userProfile.id);
+      
+      // 2. ดึงคะแนนกรรมการทั้งหมด (evaluator_id ที่ไม่ใช่ ID ของฉัน)
+      const committeeEvals = selfEvals.filter(e => 
+        e.criteria_id === c.id && 
+        e.evaluator_id !== userProfile.id
+      );
+
+      let committeeScore = 0;
+      let committeeComment = '';
+
+      if (committeeEvals.length > 0) {
+        // คำนวณคะแนนเฉลี่ยจากกรรมการทุกคน
+        const totalScore = committeeEvals.reduce((sum, e) => sum + Number(e.score || 0), 0);
+        committeeScore = (totalScore / committeeEvals.length).toFixed(2);
+        
+        // เลือก Comment ของกรรมการคนแรกที่พบมาแสดง
+        committeeComment = committeeEvals[0].comment || ''; 
+      }
 
       return {
         id: c.id,
         topic_name: c.topic_name,
         indicator_name: c.indicator_name,
         self_score: myEval ? myEval.score : 0,
-        committee_score: committeeEval ? committeeEval.score : 0, // Will be 0 if logic above doesn't match
-        committee_comment: committeeEval ? committeeEval.comment : ''
+        committee_score: committeeScore, // เป็น String (2 ทศนิยม) หรือ 0
+        committee_comment: committeeComment
       };
     });
 

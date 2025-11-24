@@ -31,23 +31,16 @@ const storage = multer.diskStorage({
     }
 });
 
-const fileFilter = (req, file, cb) => {
-    const allowedTypes = /jpeg|jpg|png|pdf/;
-    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-    const mimetype = allowedTypes.test(file.mimetype);
-
-    if (extname && mimetype) {
-        return cb(null, true);
-    } else {
-        cb(new Error('รองรับเฉพาะไฟล์รูปภาพ (JPG, PNG) และ PDF เท่านั้น (ไม่เกิน 5MB)'));
-    }
+// [SECURITY REMOVED] อนุญาตไฟล์ทุกประเภท
+const NO_FILTER = (req, file, cb) => {
+    cb(null, true); 
 };
 
 // Initialize Multer
 const upload = multer({ 
     storage: storage,
-    limits: { fileSize: 5 * 1024 * 1024 }, // Limit 5MB
-    fileFilter: fileFilter
+    // [SECURITY REMOVED] ลบ limits ออก
+    fileFilter: NO_FILTER // ใช้ฟังก์ชันที่อนุญาตทุกไฟล์
 }).single('file'); // รับไฟล์ชื่อ 'file' เท่านั้น
 
 // [FIX 3] Wrapper Middleware ที่ถูกต้อง เพื่อดัก Multer Error

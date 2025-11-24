@@ -271,8 +271,10 @@ const submitItem = async (criteria) => {
       const formData = new FormData();
       formData.append('file', file[0]);
       
-      // [FIX สำคัญ] ลบ headers ออก (โค้ดที่ถูกต้อง)
-      const uploadRes = await api.post('/upload', formData); 
+      // [FIX สำคัญ] แก้บั๊ก Content-Type โดยการกำหนด headers เพื่อให้รองรับ multipart/form-data
+      const uploadRes = await api.post('/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' } 
+      });
       
       if (uploadRes.data.status === 'success') {
         filePath = uploadRes.data.data.path;
