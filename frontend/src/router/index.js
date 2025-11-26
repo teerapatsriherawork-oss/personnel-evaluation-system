@@ -12,7 +12,9 @@ const ManageMapping = () => import('../pages/admin/ManageMapping.vue');
 const ManageRounds = () => import('../pages/admin/ManageRounds.vue');
 const ManageUsers = () => import('../pages/admin/ManageUsers.vue');
 const CommitteeSummary = () => import('../pages/admin/CommitteeSummary.vue');
-const CommitteeTracking = () => import('../pages/admin/CommitteeTracking.vue'); // [NEW] Import
+const CommitteeTracking = () => import('../pages/admin/CommitteeTracking.vue');
+// [1] เพิ่ม Import ตรงนี้
+const EvaluateeTracking = () => import('../pages/admin/EvaluateeTracking.vue');
 
 // User Pages
 const SelfAssessment = () => import('../pages/user/SelfAssessment.vue');
@@ -37,7 +39,9 @@ const routes = [
       { path: 'manage-mapping', component: ManageMapping, meta: { roles: ['admin'] } },
       { path: 'manage-users', component: ManageUsers, meta: { roles: ['admin'] } },
       { path: 'admin/committee-summary', component: CommitteeSummary, meta: { roles: ['admin'] } },
-      { path: 'admin/committee-tracking', component: CommitteeTracking, meta: { roles: ['admin'] } }, // [NEW] Route
+      { path: 'admin/committee-tracking', component: CommitteeTracking, meta: { roles: ['admin'] } },
+      // [2] เพิ่ม Route ตรงนี้ (ให้อยู่ใน children)
+      { path: 'admin/evaluatee-tracking', component: EvaluateeTracking, meta: { roles: ['admin'] } },
 
       // User Routes
       { path: 'self-assessment', component: SelfAssessment, meta: { roles: ['user'] } },

@@ -396,7 +396,7 @@ exports.getCommitteeSummary = async (req, res) => {
     }
 };
 
-// [UPDATED] Committee Progress (รวมรายชื่อผู้รับการประเมิน)
+// [UPDATED] Committee Progress
 exports.getCommitteeProgress = async (req, res) => {
     try {
         const { roundId } = req.params;
@@ -451,6 +451,78 @@ exports.getCommitteeProgress = async (req, res) => {
 
     } catch (error) {
         console.error("Error in getCommitteeProgress:", error);
+        res.status(500).json({ status: 'error', message: error.message });
+    }
+};
+
+// [NEW] ฟังก์ชันสำหรับติดตามสถานะผู้รับการประเมิน
+exports.getEvaluateeTracking = async (req, res) => {
+    try {
+        const { roundId } = req.params;
+
+        // 1. หาจำนวนข้อคำถามทั้งหมดในรอบนี้ (เพื่อใช้คำนวณ %)
+        const [criRes] = await db.execute('SELECT COUNT(*) as total FROM criterias WHERE round_id = ?', [roundId]);
+        const totalCriteria = criRes[0].total;
+
+        if (totalCriteria === 0) return res.json({ status: 'success', data: [] });
+
+        // 2. ดึงข้อมูล Users และนับจำนวนการประเมิน
+        const sql = `
+            SELECT 
+                u.id, 
+                u.fullname,
+                
+                -- นับจำนวนข้อที่ประเมินตนเองไปแล้ว
+                (SELECT COUNT(*) FROM evaluations e 
+                 WHERE e.round_id = ? AND e.evaluatee_id = u.id AND e.evaluator_id = u.id
+                ) as self_done,
+
+                -- นับจำนวนกรรมการที่ดูแล User นี้
+                (SELECT COUNT(*) FROM committees_mapping cm 
+                 WHERE cm.round_id = ? AND cm.evaluatee_id = u.id
+                ) as committee_count,
+
+                -- นับจำนวนข้อรวมทั้งหมดที่กรรมการทุกคนประเมินให้ User นี้
+                (SELECT COUNT(*) FROM evaluations e 
+                 WHERE e.round_id = ? AND e.evaluatee_id = u.id AND e.evaluator_id != u.id
+                ) as committee_eval_total
+
+            FROM users u
+            WHERE u.role = 'user'
+        `;
+
+        const [users] = await db.execute(sql, [roundId, roundId, roundId]);
+
+        // 3. คำนวณสถานะและ Progress
+        const data = users.map(u => {
+            // สถานะประเมินตนเอง (ครบตามจำนวนข้อไหม)
+            const isSelfComplete = u.self_done >= totalCriteria;
+            
+            // เป้าหมายจำนวนข้อรวมของกรรมการ (จำนวนกรรมการ * จำนวนข้อ)
+            const targetCommitteeEval = u.committee_count * totalCriteria;
+            
+            // คำนวณ % ความคืบหน้าของกรรมการ
+            const committeeProgress = targetCommitteeEval > 0 
+                ? Math.round((u.committee_eval_total / targetCommitteeEval) * 100) 
+                : 0;
+
+            return {
+                id: u.id,
+                fullname: u.fullname,
+                self_status: isSelfComplete ? 'Complete' : (u.self_done > 0 ? 'In Progress' : 'Pending'),
+                self_done: u.self_done,
+                total_criteria: totalCriteria,
+                committee_count: u.committee_count,
+                committee_progress: committeeProgress, // 0-100%
+                committee_eval_total: u.committee_eval_total,
+                target_committee_eval: targetCommitteeEval
+            };
+        });
+
+        res.status(200).json({ status: 'success', data });
+
+    } catch (error) {
+        console.error("Error in getEvaluateeTracking:", error);
         res.status(500).json({ status: 'error', message: error.message });
     }
 };

@@ -45,12 +45,13 @@ exports.getGradingInfo = async (req, res) => {
         const evaluatorId = req.user.id;
         const { roundId, evaluateeId } = req.params;
 
-        // 1. ดึงเกณฑ์
+        // [FIXED] 1. ดึงเกณฑ์ (เพิ่ม ORDER BY เพื่อให้ลำดับข้อแน่นอน)
         const [criterias] = await db.execute(
             `SELECT c.*, t.topic_name 
              FROM criterias c
              JOIN topics t ON c.topic_id = t.id
-             WHERE c.round_id = ?`, 
+             WHERE c.round_id = ?
+             ORDER BY c.id ASC`, 
             [roundId]
         );
 
@@ -63,7 +64,7 @@ exports.getGradingInfo = async (req, res) => {
             [roundId, evaluateeId, evaluateeId, evaluatorId]
         );
 
-        // [NEW] 3. ดึงลายเซ็นจาก Profile ของกรรมการ (เพื่อใช้เป็นค่า Default)
+        // 3. ดึงลายเซ็นจาก Profile ของกรรมการ (เพื่อใช้เป็นค่า Default)
         const [evaluatorUser] = await db.execute(
             'SELECT signature_path FROM users WHERE id = ?',
             [evaluatorId]

@@ -217,9 +217,14 @@ const fetchData = async () => {
     const res = await api.get(`/committee/grading/${roundId.value}/${evaluateeId.value}`);
     criterias.value = res.data.data;
     
-    // [UPDATED] หาจาก field 'committee_signature' ที่ Backend ส่งมา
-    if (criterias.value.length > 0 && criterias.value[0].profile_signature) {
-      existingSignature.value = criterias.value[0].profile_signature;
+    // เช็คว่ามีลายเซ็นในการประเมินรอบนี้แล้วหรือยัง (ถ้าไม่มีค่อยดึงจาก Profile)
+    if (criterias.value.length > 0) {
+      const firstItem = criterias.value[0];
+      if (firstItem.my_evidence_file) {
+        existingSignature.value = firstItem.my_evidence_file;
+      } else if (firstItem.profile_signature) {
+        existingSignature.value = firstItem.profile_signature;
+      }
     }
 
     criterias.value.forEach(c => {
@@ -247,9 +252,10 @@ const handleSubmitGrading = async () => {
     if (signatureFile.value && signatureFile.value.length > 0) {
       const formData = new FormData();
       formData.append('file', signatureFile.value[0]);
-      const uploadRes = await api.post('/upload', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
+      
+      // [FIXED] ลบ headers ออกเพื่อให้ Browser จัดการ Boundary เอง
+      const uploadRes = await api.post('/upload', formData);
+      
       signaturePath = uploadRes.data.data.path;
     }
     

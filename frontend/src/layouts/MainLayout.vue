@@ -35,6 +35,10 @@
           <v-list-item link to="/admin/committee-tracking" prepend-icon="mdi-chart-timeline-variant">
             <v-list-item-title>ติดตามสถานะกรรมการ</v-list-item-title>
           </v-list-item>
+
+          <v-list-item link to="/admin/evaluatee-tracking" prepend-icon="mdi-account-search">
+            <v-list-item-title>ติดตามผู้รับการประเมิน</v-list-item-title>
+          </v-list-item>
         </div>
 
         <div v-if="store.isUser">

@@ -64,6 +64,9 @@ router.get('/admin/stats', authMiddleware, adminController.getDashboardStats);
 router.get('/admin/summary/:roundId', authMiddleware, adminController.getCommitteeSummary);
 router.get('/admin/committee-progress/:roundId', authMiddleware, adminController.getCommitteeProgress);
 
+// [NEW] Evaluatee Tracking Route
+router.get('/admin/evaluatee-tracking/:roundId', authMiddleware, adminController.getEvaluateeTracking);
+
 // 2. User & Committee Routes
 router.post('/user/evaluate', authMiddleware, userController.submitSelfAssessment);
 router.get('/user/evaluations/:roundId', authMiddleware, userController.getMyEvaluations);
