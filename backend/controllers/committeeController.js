@@ -110,17 +110,14 @@ exports.getGradingInfo = async (req, res) => {
 
         // ดึงลายเซ็นล่าสุดที่กรรมการเคยแนบ (ถ้ามี)
         let profileSignature = null;
-        // 1. ลองดึงจาก Evaluation ล่าสุด
         const lastEvalWithFile = myEvals.find(e => e.evidence_file);
         if (lastEvalWithFile) profileSignature = lastEvalWithFile.evidence_file;
         
-        // 2. ถ้าไม่มี ลองดึงจาก Profile กรรมการ
         if (!profileSignature) {
              const [committeeData] = await db.execute('SELECT signature_path FROM users WHERE id = ?', [evaluatorId]);
              if(committeeData.length > 0) profileSignature = committeeData[0].signature_path;
         }
 
-        // รวมข้อมูลส่งกลับไปหน้าบ้าน
         const data = criterias.map(c => {
             const self = selfEvals.find(e => e.criteria_id === c.id) || {};
             const my = myEvals.find(e => e.criteria_id === c.id) || {};
@@ -132,19 +129,13 @@ exports.getGradingInfo = async (req, res) => {
                 description: c.description,
                 max_score: c.max_score,
                 scoring_type: c.scoring_type,
-                
-                // ข้อมูล User
                 self_score: self.score || null,
                 self_comment: self.comment || null,
                 self_evidence_url: self.evidence_url || null,
                 self_evidence_file: self.evidence_file || null,
-
-                // ข้อมูลกรรมการ
                 my_score: my.score || null,
                 my_comment: my.comment || '',
-                my_evidence_file: my.evidence_file || null, // ไฟล์แนบรายข้อ
-                
-                // ข้อมูลกลางสำหรับหน้าจอ
+                my_evidence_file: my.evidence_file || null,
                 profile_signature: profileSignature 
             };
         });
@@ -163,33 +154,26 @@ exports.submitGrading = async (req, res) => {
         const evaluatorId = req.user.id;
         let { round_id, criteria_id, evaluatee_id, score, comment, evidence_file } = req.body;
 
-        // ถ้ามีการส่งไฟล์แนบ (ลายเซ็น) มาเป็น Base64 ให้บันทึก
         if (evidence_file && evidence_file.startsWith('data:')) {
             evidence_file = saveBase64ToFile(evidence_file);
         }
 
-        // เช็คว่าเคยให้คะแนนข้อนี้ไปหรือยัง
         const [existing] = await db.execute(
             'SELECT id FROM evaluations WHERE round_id=? AND criteria_id=? AND evaluatee_id=? AND evaluator_id=?',
             [round_id, criteria_id, evaluatee_id, evaluatorId]
         );
 
         if (existing.length > 0) {
-            // Update
             let sql = 'UPDATE evaluations SET score=?, comment=?, updated_at=NOW()';
             let params = [score, comment];
-            
             if (evidence_file) {
                 sql += ', evidence_file=?';
                 params.push(evidence_file);
             }
-            
             sql += ' WHERE id=?';
             params.push(existing[0].id);
-            
             await db.execute(sql, params);
         } else {
-            // Insert
             await db.execute(
                 'INSERT INTO evaluations (round_id, criteria_id, evaluatee_id, evaluator_id, score, comment, evidence_file) VALUES (?, ?, ?, ?, ?, ?, ?)',
                 [round_id, criteria_id, evaluatee_id, evaluatorId, score, comment, evidence_file]

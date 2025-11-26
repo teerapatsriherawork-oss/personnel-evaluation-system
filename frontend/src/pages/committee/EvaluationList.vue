@@ -112,6 +112,7 @@ const snackbar = reactive({ show: false, message: '', color: 'success' });
 
 onMounted(async () => {
   try {
+    // ดึงรายการรอบการประเมิน
     const res = await api.get('/admin/rounds');
     rounds.value = res.data.data.filter(r => r.status === 'open');
     if (rounds.value.length > 0) {
@@ -132,6 +133,7 @@ const fetchEvaluatees = async () => {
   
   loading.value = true;
   try {
+    // เรียก API ไปยัง Backend
     const res = await api.get(`/committee/rounds/${selectedRoundId.value}/evaluatees`);
     evaluatees.value = res.data.data;
   } catch (error) {

@@ -1,7 +1,9 @@
+// File: backend/controllers/userController.js
+
 const db = require('../config/database');
 const fs = require('fs');
 const path = require('path');
-const bcrypt = require('bcryptjs'); // ต้องมี bcryptjs
+const bcrypt = require('bcryptjs');
 
 // Helper: แปลง Base64 เป็นไฟล์ลง Disk
 const saveBase64ToFile = (base64String) => {

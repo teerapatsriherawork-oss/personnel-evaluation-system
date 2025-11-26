@@ -1,9 +1,9 @@
+// File: backend/controllers/adminController.js
+
 const db = require('../config/database');
 const bcrypt = require('bcryptjs');
 
-// ==========================================
-// 1. ส่วนจัดการ Rounds (รอบการประเมิน)
-// ==========================================
+// 1. Rounds
 exports.createRound = async (req, res) => {
     try {
         const { round_name, start_date, end_date } = req.body;
@@ -61,9 +61,7 @@ exports.deleteRound = async (req, res) => {
     }
 };
 
-// ==========================================
-// 2. ส่วนจัดการ Topics (หัวข้อ)
-// ==========================================
+// 2. Topics
 exports.createTopic = async (req, res) => {
     try {
         const { round_id, topic_name } = req.body;
@@ -108,9 +106,7 @@ exports.deleteTopic = async (req, res) => {
     }
 };
 
-// ==========================================
-// 3. ส่วนจัดการ Criterias (ตัวชี้วัด)
-// ==========================================
+// 3. Criterias
 exports.createCriteria = async (req, res) => {
     try {
         const { round_id, topic_id, indicator_name, description = null, max_score, scoring_type, require_evidence = false } = req.body;
@@ -166,9 +162,7 @@ exports.deleteCriteria = async (req, res) => {
     }
 };
 
-// ==========================================
-// 4. ส่วนจัดการ Users (ผู้ใช้งาน)
-// ==========================================
+// 4. Users
 exports.getAllUsers = async (req, res) => {
     try {
         const [users] = await db.execute('SELECT id, username, fullname, role FROM users ORDER BY id DESC');
@@ -229,9 +223,7 @@ exports.deleteUser = async (req, res) => {
     }
 };
 
-// ==========================================
-// 5. ส่วนอื่นๆ (Mapping, Dashboard, Summary)
-// ==========================================
+// 5. Mapping & Others
 exports.assignCommittee = async (req, res) => {
     try {
         const { round_id, evaluator_id, evaluatee_id, role } = req.body;
@@ -384,7 +376,6 @@ exports.getCommitteeProgress = async (req, res) => {
     }
 };
 
-// [NEW] ฟังก์ชันนี้ที่ขาดหายไป ทำให้เกิด Error
 exports.getEvaluateeTracking = async (req, res) => {
     try {
         const { roundId } = req.params;

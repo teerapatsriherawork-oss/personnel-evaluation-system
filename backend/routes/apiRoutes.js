@@ -1,3 +1,5 @@
+// File: backend/routes/apiRoutes.js
+
 const express = require('express');
 const router = express.Router();
 
@@ -11,6 +13,7 @@ const authMiddleware = require('../middleware/authMiddleware');
 
 console.log("Checking Controllers...");
 if (!adminController.createRound) console.error("❌ Error: adminController.createRound is missing!");
+if (!userController.getMyEvaluations) console.error("❌ Error: userController.getMyEvaluations is missing! Check userController.js");
 if (!authMiddleware) console.error("❌ Error: authMiddleware is missing!");
 console.log("Controllers Check Done.");
 
@@ -53,6 +56,7 @@ router.get('/admin/stats', authMiddleware, adminController.getDashboardStats);
 router.get('/admin/summary/:roundId', authMiddleware, adminController.getCommitteeSummary);
 router.get('/admin/committee-progress/:roundId', authMiddleware, adminController.getCommitteeProgress);
 router.get('/admin/evaluatee-tracking/:roundId', authMiddleware, adminController.getEvaluateeTracking);
+router.get('/admin/report/:roundId/:userId', authMiddleware, adminController.getUserEvaluations); // Route สำหรับดูรายงานรายบุคคล
 
 // 2. User & Committee Routes
 router.post('/user/evaluate', authMiddleware, userController.submitSelfAssessment);
@@ -62,6 +66,7 @@ router.get('/user/evaluations/:roundId', authMiddleware, userController.getMyEva
 router.get('/user/profile', authMiddleware, userController.getProfile);
 router.put('/user/profile', authMiddleware, userController.updateProfile);
 
+// [NEW] Committee Routes
 router.get('/committee/rounds/:roundId/evaluatees', authMiddleware, committeeController.getEvaluatees);
 router.get('/committee/grading/:roundId/:evaluateeId', authMiddleware, committeeController.getGradingInfo);
 router.post('/committee/grade', authMiddleware, committeeController.submitGrading);
