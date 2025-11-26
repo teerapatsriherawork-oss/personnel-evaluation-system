@@ -1,10 +1,59 @@
 const db = require('../config/database');
+const fs = require('fs');
+const path = require('path');
+
+// Helper: แปลง Base64 เป็นไฟล์ลง Disk
+const saveBase64ToFile = (base64String) => {
+    if (!base64String || !base64String.startsWith('data:')) return base64String;
+
+    try {
+        // แยก Header ออก (เช่น data:image/png;base64,)
+        const matches = base64String.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+        if (!matches || matches.length !== 3) {
+            return base64String; // รูปแบบไม่ถูกต้อง คืนค่าเดิมไป
+        }
+
+        const type = matches[1];
+        const data = Buffer.from(matches[2], 'base64');
+        
+        // สร้างนามสกุลไฟล์
+        let extension = 'bin';
+        if (type.includes('jpeg') || type.includes('jpg')) extension = 'jpg';
+        else if (type.includes('png')) extension = 'png';
+        else if (type.includes('pdf')) extension = 'pdf';
+
+        // สร้างชื่อไฟล์สุ่ม
+        const filename = `upload-${Date.now()}-${Math.round(Math.random() * 1E9)}.${extension}`;
+        const uploadDir = path.join(__dirname, '../uploads');
+        
+        // ตรวจสอบว่ามีโฟลเดอร์ uploads ไหม
+        if (!fs.existsSync(uploadDir)){
+            fs.mkdirSync(uploadDir, { recursive: true });
+        }
+
+        // บันทึกลงเครื่อง
+        fs.writeFileSync(path.join(uploadDir, filename), data);
+        
+        console.log(`[Base64] Saved file to: /uploads/${filename}`);
+        return `/uploads/${filename}`; // คืนค่าเป็น Path เพื่อบันทึกลง DB
+
+    } catch (error) {
+        console.error("[Base64] Error saving file:", error);
+        return null;
+    }
+};
 
 // Submit Self-Assessment
 exports.submitSelfAssessment = async (req, res) => {
     try {
         const userId = req.user.id;
-        const { round_id, criteria_id, score, evidence_file, evidence_url, comment } = req.body;
+        let { round_id, criteria_id, score, evidence_file, evidence_url, comment } = req.body;
+
+        // [NEW] จัดการแปลง Base64 เป็นไฟล์ (ถ้ามีการส่งมาแบบ Base64)
+        // เพื่อให้ Database เก็บแค่ Path สั้นๆ ไม่ error 'Data too long'
+        if (evidence_file && evidence_file.startsWith('data:')) {
+            evidence_file = saveBase64ToFile(evidence_file);
+        }
 
         const [existing] = await db.execute(
             'SELECT id FROM evaluations WHERE round_id=? AND criteria_id=? AND evaluatee_id=? AND evaluator_id=?',
@@ -12,10 +61,19 @@ exports.submitSelfAssessment = async (req, res) => {
         );
 
         if (existing.length > 0) {
-            await db.execute(
-                'UPDATE evaluations SET score=?, evidence_file=?, evidence_url=?, comment=? WHERE id=?',
-                [score, evidence_file, evidence_url, comment, existing[0].id]
-            );
+            // ถ้าเป็น null (เช่น saveBase64ToFile error) ไม่ต้องอัปเดต field นั้น
+            let sql = 'UPDATE evaluations SET score=?, evidence_url=?, comment=?';
+            let params = [score, evidence_url, comment];
+
+            if (evidence_file !== undefined) {
+                sql += ', evidence_file=?';
+                params.push(evidence_file);
+            }
+
+            sql += ' WHERE id=?';
+            params.push(existing[0].id);
+
+            await db.execute(sql, params);
         } else {
             await db.execute(
                 'INSERT INTO evaluations (round_id, criteria_id, evaluatee_id, evaluator_id, score, evidence_file, evidence_url, comment) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
@@ -25,6 +83,7 @@ exports.submitSelfAssessment = async (req, res) => {
 
         res.status(200).json({ status: 'success', message: 'Self-assessment submitted' });
     } catch (error) {
+        console.error(error);
         res.status(500).json({ status: 'error', message: error.message });
     }
 };

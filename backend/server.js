@@ -1,30 +1,36 @@
 // File: backend/server.js
 
-const express = require('express');
-const cors = require('cors');
-const path = require('path');
-require('dotenv').config({ path: '../.env' });
+const express = require("express");
+const cors = require("cors");
+const path = require("path");
+require("dotenv").config({ path: "../.env" });
 
 // Import Routes
-const apiRoutes = require('./routes/apiRoutes');
+const apiRoutes = require("./routes/apiRoutes");
 
 const app = express();
 
-// Middleware
 app.use(cors());
-// [FIX: ลบ Global Body Parsers ออก]
-// app.use(express.json()); 
-// app.use(express.urlencoded({ extended: true })); 
+
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Static Files (รูปภาพ/PDF)
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // API Routes
-app.use('/api', apiRoutes);
+app.use(
+  "/api",
+  (req, res, next) => {
+    console.log(`Incoming ${req.method} request to ${req.originalUrl}`);
+    next();
+  },
+  apiRoutes
+);
 
 // Test Endpoint
-app.get('/', (req, res) => {
-  res.send('Personnel Evaluation System API is running...');
+app.get("/", (req, res) => {
+  res.send("Personnel Evaluation System API is running...");
 });
 
 const PORT = process.env.PORT || 5000;

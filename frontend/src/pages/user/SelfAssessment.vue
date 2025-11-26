@@ -61,6 +61,7 @@
 
           <v-expansion-panel-text>
             <v-divider class="mb-4"></v-divider>
+            <!-- Pass criteria object to submitItem -->
             <v-form @submit.prevent="submitItem(criteria)">
               <v-row>
                 <v-col cols="12" md="7">
@@ -111,9 +112,14 @@
                         <v-icon color="success" class="mr-3">mdi-file-check</v-icon>
                         <div class="mr-auto">
                             <div class="text-success font-weight-bold">มีไฟล์แนบแล้ว</div>
-                            <div class="text-caption text-grey-darken-1">คุณได้อัปโหลดไว้แล้ว</div>
+                            <!-- แสดงว่าเป็น path หรือ base64 (คร่าวๆ) -->
+                            <div class="text-caption text-grey-darken-1">
+                              {{ formModels[criteria.id].evidence_file.startsWith('data:') ? 'ไฟล์ใหม่ (รอ Save)' : 'ไฟล์เดิมที่บันทึกแล้ว' }}
+                            </div>
                         </div>
+                        <!-- ปุ่มกดดูไฟล์ (จะทำงานได้เฉพาะถ้าเป็น URL path เดิม) -->***
                         <v-btn
+                            v-if="!formModels[criteria.id].evidence_file.startsWith('data:')"
                             :href="getFileUrl(formModels[criteria.id].evidence_file)"
                             target="_blank"
                             color="success"
@@ -197,11 +203,9 @@ const formModels = reactive({});
 const fileInputs = reactive({});
 const loadingIds = reactive({});
 
-// สร้าง URL สำหรับไฟล์แนบ
 const getFileUrl = (path) => {
   if (!path) return '';
-  if (path.startsWith('http')) return path;
-  // เติม / ข้างหน้าถ้าไม่มี
+  if (path.startsWith('http') || path.startsWith('data:')) return path;
   const cleanPath = path.startsWith('/') ? path : `/${path}`;
   return `http://localhost:5000${cleanPath}`;
 };
@@ -220,16 +224,13 @@ const fetchCriterias = async () => {
   
   loading.value = true;
   try {
-    // 1. ดึงเกณฑ์
     const criRes = await api.get(`/admin/rounds/${selectedRoundId.value}/criterias`);
     const fetchedCriterias = criRes.data.data;
 
-    // 2. ดึงผลประเมินของฉัน
     const evalRes = await api.get(`/user/evaluations/${selectedRoundId.value}`);
     const myEvals = evalRes.data.data || [];
 
     criterias.value = fetchedCriterias.map(c => {
-      // [CRITICAL FIX] ใช้ == เพื่อเทียบ ID (เผื่อเป็น string vs number) และเช็คว่าเป็นของตัวเอง
       const existing = myEvals.find(e => 
         e.criteria_id == c.id && 
         e.evaluator_id == authStore.user.id
@@ -239,7 +240,7 @@ const fetchCriterias = async () => {
         score: existing ? Number(existing.score) : 0,
         comment: existing?.comment || '',
         evidence_url: existing?.evidence_url || '',
-        evidence_file: existing?.evidence_file || '' // เก็บ Path ไฟล์
+        evidence_file: existing?.evidence_file || ''
       };
 
       return {
@@ -258,28 +259,46 @@ const fetchCriterias = async () => {
   }
 };
 
+// [Updated] ฟังก์ชันใหม่จากเพื่อนคุณ
 const submitItem = async (criteria) => {
   const cId = criteria.id;
   loadingIds[cId] = true;
 
   try {
+
+    console.log("formModels : " , formModels)
+
     let filePath = formModels[cId].evidence_file; // เริ่มต้นด้วยค่าเดิม
+
+    let fileString = "";
+
+
+    console.log("filePath:",filePath)
+
 
     // ถ้ามีการเลือกไฟล์ใหม่ -> อัปโหลด
     const file = fileInputs[cId]; 
-    if (file && file.length > 0) {
-      const formData = new FormData();
-      formData.append('file', file[0]);
-      
-      // [FIXED] กำหนด headers ให้เป็น multipart/form-data เพื่อ override ค่าเริ่มต้น (JSON)
-      const uploadRes = await api.post('/upload', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' } 
+
+    const fileToBase64 = async (file) => {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = error => reject(error);
+        reader.readAsDataURL(file);
       });
+    };
+
+ if (file && file instanceof File) { 
+      console.log("Uploading new file...");
       
-      if (uploadRes.data.status === 'success') {
-        filePath = uploadRes.data.data.path;
-      }
+      fileString = await fileToBase64(file);
+      
+  
+ 
     }
+
+ 
+    console.log("fileString:",fileString)
 
     const payload = {
       round_id: selectedRoundId.value,
@@ -287,7 +306,7 @@ const submitItem = async (criteria) => {
       score: formModels[cId].score,
       comment: formModels[cId].comment,
       evidence_url: formModels[cId].evidence_url,
-      evidence_file: filePath // ส่งค่า (เดิม หรือ ใหม่) กลับไปบันทึก
+      evidence_file: fileString
     };
 
     await api.post('/user/evaluate', payload);
@@ -295,7 +314,7 @@ const submitItem = async (criteria) => {
     // อัปเดตสถานะหน้าจอทันที
     criteria.isSubmitted = true;
     formModels[cId].evidence_file = filePath; 
-    fileInputs[cId] = null; // ล้าง Input
+    // fileInputs[cId] = null; // ล้าง Input
     
     snackbar.message = 'บันทึกข้อมูลสำเร็จ';
     snackbar.color = 'success';

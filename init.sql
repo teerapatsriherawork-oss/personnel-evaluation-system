@@ -94,10 +94,3 @@ CREATE TABLE IF NOT EXISTS evaluations (
 
     UNIQUE KEY unique_evaluation (round_id, criteria_id, evaluatee_id, evaluator_id)
 ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-
--- ==========================================
--- 7. Seed Data (ข้อมูลเริ่มต้น)
--- ==========================================
--- Hash นี้คือ '123456' (Generate จาก bcryptjs)
-INSERT INTO users (username, password_hash, fullname, role) VALUES 
-('admin', '$2a$10$8.UnVuG9HHgffUDAlk8qfOuVGkqRzgVymGe07xd00DMxs.AQiy38a', 'System Administrator', 'admin');
