@@ -50,6 +50,11 @@
           <v-list-item link to="/self-assessment" prepend-icon="mdi-account-edit">
             <v-list-item-title>ประเมินตนเอง</v-list-item-title>
           </v-list-item>
+          
+          <v-list-item link to="/progress" prepend-icon="mdi-poll">
+            <v-list-item-title>ความคืบหน้า (ภาพรวม)</v-list-item-title>
+          </v-list-item>
+          
           <v-list-item link to="/my-report" prepend-icon="mdi-chart-bar">
             <v-list-item-title>รายงานผลของฉัน</v-list-item-title>
           </v-list-item>

@@ -18,7 +18,8 @@ const EvaluateeTracking = () => import('../pages/admin/EvaluateeTracking.vue');
 // User Pages
 const SelfAssessment = () => import('../pages/user/SelfAssessment.vue');
 const MyReport = () => import('../pages/user/MyReport.vue');
-const Profile = () => import('../pages/user/Profile.vue'); // [NEW]
+const Profile = () => import('../pages/user/Profile.vue');
+const UserProgress = () => import('../pages/user/UserProgress.vue'); // [เพิ่มส่วนนี้]
 
 // Committee Pages
 const EvaluationList = () => import('../pages/committee/EvaluationList.vue');
@@ -45,8 +46,9 @@ const routes = [
       // User Routes
       { path: 'self-assessment', component: SelfAssessment, meta: { roles: ['user'] } },
       { path: 'my-report', component: MyReport, meta: { roles: ['user'] } },
+      { path: 'progress', component: UserProgress, meta: { roles: ['user'] } }, // [เพิ่มส่วนนี้]
       
-      // [NEW] Profile Route (เข้าได้ทุกคนที่ Login)
+      // Profile Route
       { path: 'profile', component: Profile, meta: { roles: ['admin', 'user', 'committee'] } },
 
       // Committee Routes
