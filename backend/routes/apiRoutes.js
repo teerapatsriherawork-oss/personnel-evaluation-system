@@ -56,19 +56,21 @@ router.get('/admin/stats', authMiddleware, adminController.getDashboardStats);
 router.get('/admin/summary/:roundId', authMiddleware, adminController.getCommitteeSummary);
 router.get('/admin/committee-progress/:roundId', authMiddleware, adminController.getCommitteeProgress);
 router.get('/admin/evaluatee-tracking/:roundId', authMiddleware, adminController.getEvaluateeTracking);
-router.get('/admin/report/:roundId/:userId', authMiddleware, adminController.getUserEvaluations); // Route สำหรับดูรายงานรายบุคคล
+router.get('/admin/report/:roundId/:userId', authMiddleware, adminController.getUserEvaluations);
 
 // 2. User & Committee Routes
 router.post('/user/evaluate', authMiddleware, userController.submitSelfAssessment);
 router.get('/user/evaluations/:roundId', authMiddleware, userController.getMyEvaluations);
 
-// [NEW] Profile Routes
+// Profile Routes
 router.get('/user/profile', authMiddleware, userController.getProfile);
 router.put('/user/profile', authMiddleware, userController.updateProfile);
 
-// [NEW] Committee Routes
+// Committee Routes
 router.get('/committee/rounds/:roundId/evaluatees', authMiddleware, committeeController.getEvaluatees);
 router.get('/committee/grading/:roundId/:evaluateeId', authMiddleware, committeeController.getGradingInfo);
 router.post('/committee/grade', authMiddleware, committeeController.submitGrading);
+// [NEW] Route สำหรับบันทึกความคิดเห็นสรุป
+router.post('/committee/overall-comment', authMiddleware, committeeController.submitOverallComment);
 
 module.exports = router;

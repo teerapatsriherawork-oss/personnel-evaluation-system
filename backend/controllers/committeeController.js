@@ -77,7 +77,7 @@ exports.getEvaluatees = async (req, res) => {
     }
 };
 
-// 2. ดึงข้อมูลสำหรับหน้าให้คะแนน (เกณฑ์ + คะแนนตนเอง + คะแนนที่เคยให้)
+// 2. ดึงข้อมูลสำหรับหน้าให้คะแนน (เกณฑ์ + คะแนนตนเอง + คะแนนที่เคยให้ + ความคิดเห็นสรุป)
 exports.getGradingInfo = async (req, res) => {
     try {
         const evaluatorId = req.user.id;
@@ -93,17 +93,24 @@ exports.getGradingInfo = async (req, res) => {
         `;
         const [criterias] = await db.execute(sql, [roundId]);
 
-        // ดึงคะแนนประเมินตนเอง (User Self Assessment)
+        // ดึงคะแนนประเมินตนเอง
         const [selfEvals] = await db.execute(
             'SELECT * FROM evaluations WHERE round_id = ? AND evaluatee_id = ? AND evaluator_id = ?',
             [roundId, evaluateeId, evaluateeId]
         );
 
-        // ดึงคะแนนที่กรรมการคนนี้เคยให้ไปแล้ว (Committee Evaluation)
+        // ดึงคะแนนที่กรรมการคนนี้เคยให้ไปแล้ว
         const [myEvals] = await db.execute(
             'SELECT * FROM evaluations WHERE round_id = ? AND evaluatee_id = ? AND evaluator_id = ?',
             [roundId, evaluateeId, evaluatorId]
         );
+
+        // [NEW] ดึงความคิดเห็นสรุป (Overall Comment) จากตาราง committees_mapping
+        const [mappingRes] = await db.execute(
+            'SELECT overall_comment FROM committees_mapping WHERE round_id = ? AND evaluator_id = ? AND evaluatee_id = ?',
+            [roundId, evaluatorId, evaluateeId]
+        );
+        const overallComment = mappingRes.length > 0 ? mappingRes[0].overall_comment : '';
 
         // ดึงลายเซ็นเดิม
         let profileSignature = null;
@@ -134,7 +141,6 @@ exports.getGradingInfo = async (req, res) => {
                 self_evidence_file: self ? self.evidence_file : null,
                 
                 // ข้อมูลที่กรรมการเคยประเมินไว้
-                // ใช้ != null เพื่อดักทั้ง null และ undefined แต่ยอมให้ 0 ผ่าน
                 my_score: (my && my.score != null) ? my.score : null,
                 my_comment: my ? my.comment : '',
                 my_evidence_file: my ? my.evidence_file : null,
@@ -142,7 +148,8 @@ exports.getGradingInfo = async (req, res) => {
             };
         });
 
-        res.status(200).json({ status: 'success', data });
+        // ส่งข้อมูลกลับไป พร้อม overall_comment
+        res.status(200).json({ status: 'success', data, overall_comment: overallComment });
 
     } catch (error) {
         console.error(error);
@@ -150,7 +157,7 @@ exports.getGradingInfo = async (req, res) => {
     }
 };
 
-// 3. บันทึกการให้คะแนน
+// 3. บันทึกการให้คะแนนรายข้อ
 exports.submitGrading = async (req, res) => {
     try {
         const evaluatorId = req.user.id;
@@ -186,6 +193,24 @@ exports.submitGrading = async (req, res) => {
 
     } catch (error) {
         console.error(error);
+        res.status(500).json({ status: 'error', message: error.message });
+    }
+};
+
+// [NEW] 4. บันทึกความคิดเห็นสรุป (Overall Comment)
+exports.submitOverallComment = async (req, res) => {
+    try {
+        const evaluatorId = req.user.id;
+        const { round_id, evaluatee_id, comment } = req.body;
+
+        await db.execute(
+            'UPDATE committees_mapping SET overall_comment = ? WHERE round_id = ? AND evaluator_id = ? AND evaluatee_id = ?',
+            [comment, round_id, evaluatorId, evaluatee_id]
+        );
+
+        res.status(200).json({ status: 'success', message: 'Overall comment saved' });
+    } catch (error) {
+        console.error("Submit Overall Comment Error:", error);
         res.status(500).json({ status: 'error', message: error.message });
     }
 };

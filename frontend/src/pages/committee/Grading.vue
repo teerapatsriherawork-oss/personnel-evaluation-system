@@ -101,6 +101,23 @@
         </tbody>
       </v-table>
       
+      <v-card class="mb-6 elevation-2 border border-secondary">
+        <v-card-title class="bg-grey-lighten-4 text-subtitle-1 font-weight-bold">
+          <v-icon start color="secondary">mdi-comment-text-outline</v-icon>
+          ความคิดเห็นสรุปโดยภาพรวม (Overall Comment)
+        </v-card-title>
+        <v-card-text class="pt-4">
+          <v-textarea
+            v-model="overallComment"
+            label="สรุปผลการประเมิน / จุดเด่น / จุดที่ควรพัฒนา"
+            variant="outlined"
+            rows="3"
+            placeholder="ระบุความคิดเห็นสรุปสำหรับผู้รับการประเมินรายนี้..."
+            hide-details
+          ></v-textarea>
+        </v-card-text>
+      </v-card>
+
       <v-card class="elevation-4 border-t-lg border-primary mb-6">
         <v-card-title class="d-flex align-center">
           <v-icon color="primary" start>mdi-check-decagram</v-icon>
@@ -171,6 +188,7 @@ const evaluateeId = ref(route.params.evaluateeId);
 
 const criterias = ref([]);
 const formModels = reactive({});
+const overallComment = ref(''); // [NEW] ตัวแปรเก็บความคิดเห็นสรุป
 const signatureFile = ref([]); 
 const existingSignature = ref(null);
 const loading = ref(true);
@@ -210,6 +228,7 @@ const fetchData = async () => {
   try {
     const res = await api.get(`/committee/grading/${roundId.value}/${evaluateeId.value}`);
     criterias.value = res.data.data;
+    overallComment.value = res.data.overall_comment || ''; // [NEW] โหลดความคิดเห็นสรุปเดิม
     
     if (criterias.value.length > 0) {
       const firstItem = criterias.value[0];
@@ -220,11 +239,9 @@ const fetchData = async () => {
       }
     }
 
-    // [Updated] Logic การดึงค่าเริ่มต้น
     criterias.value.forEach(c => {
       const hasScore = c.my_score !== null && c.my_score !== undefined;
       formModels[c.id] = {
-        // ใช้ null หากไม่มีคะแนน เพื่อไม่ให้ Radio ถูกเลือกผิด (โดยเฉพาะกรณี Boolean 0)
         score: hasScore ? Number(c.my_score) : null, 
         comment: c.my_comment || '',
       };
@@ -250,8 +267,7 @@ const handleSubmitGrading = async () => {
     }
     
     const promises = criterias.value.map(c => {
-      // ตรวจสอบว่ามีการให้คะแนนหรือไม่ ถ้า formModels[c.id].score เป็น null แสดงว่ายังไม่ได้เลือก
-      const scoreToSend = formModels[c.id].score !== null ? formModels[c.id].score : 0; // ส่ง 0 หากยังไม่เลือก (หรือจะ Handle Validation ก็ได้)
+      const scoreToSend = formModels[c.id].score !== null ? formModels[c.id].score : 0;
 
       const payload = {
         round_id: roundId.value,
@@ -267,6 +283,13 @@ const handleSubmitGrading = async () => {
       
       return api.post('/committee/grade', payload);
     });
+
+    // [NEW] เพิ่ม Request สำหรับบันทึกความคิดเห็นสรุป
+    promises.push(api.post('/committee/overall-comment', {
+        round_id: roundId.value,
+        evaluatee_id: evaluateeId.value,
+        comment: overallComment.value
+    }));
     
     await Promise.all(promises);
     

@@ -60,7 +60,7 @@ CREATE TABLE IF NOT EXISTS criterias (
 ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- ==========================================
--- 5. ตาราง Mapping กรรมการ
+-- 5. ตาราง Mapping กรรมการ (อัปเดตเพิ่ม overall_comment)
 -- ==========================================
 CREATE TABLE IF NOT EXISTS committees_mapping (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -68,6 +68,7 @@ CREATE TABLE IF NOT EXISTS committees_mapping (
     evaluator_id INT NOT NULL,
     evaluatee_id INT NOT NULL,
     role ENUM('chairman', 'member') NOT NULL,
+    overall_comment TEXT NULL, -- [NEW] ช่องเก็บความคิดเห็นสรุป
     
     FOREIGN KEY (round_id) REFERENCES rounds(id) ON DELETE CASCADE,
     FOREIGN KEY (evaluator_id) REFERENCES users(id) ON DELETE CASCADE,
