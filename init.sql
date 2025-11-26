@@ -10,6 +10,10 @@ CREATE TABLE IF NOT EXISTS users (
     username VARCHAR(50) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
     fullname VARCHAR(100) NOT NULL,
+    email VARCHAR(100) NULL,
+    phone VARCHAR(20) NULL,
+    position VARCHAR(100) NULL,
+    department VARCHAR(100) NULL,
     role ENUM('admin', 'user', 'committee') NOT NULL,
     signature_path VARCHAR(255) NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP

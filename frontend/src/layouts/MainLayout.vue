@@ -7,6 +7,11 @@
         </v-list-item-title>
         <v-divider></v-divider>
 
+        <v-list-item link to="/profile" prepend-icon="mdi-account-circle" color="primary">
+          <v-list-item-title>ข้อมูลส่วนตัว</v-list-item-title>
+        </v-list-item>
+        <v-divider class="my-2"></v-divider>
+
         <div v-if="store.isAdmin">
           <v-list-item link to="/dashboard" prepend-icon="mdi-view-dashboard">
             <v-list-item-title>Dashboard</v-list-item-title>

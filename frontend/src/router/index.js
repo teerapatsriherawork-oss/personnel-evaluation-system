@@ -13,12 +13,12 @@ const ManageRounds = () => import('../pages/admin/ManageRounds.vue');
 const ManageUsers = () => import('../pages/admin/ManageUsers.vue');
 const CommitteeSummary = () => import('../pages/admin/CommitteeSummary.vue');
 const CommitteeTracking = () => import('../pages/admin/CommitteeTracking.vue');
-// [1] เพิ่ม Import ตรงนี้
 const EvaluateeTracking = () => import('../pages/admin/EvaluateeTracking.vue');
 
 // User Pages
 const SelfAssessment = () => import('../pages/user/SelfAssessment.vue');
 const MyReport = () => import('../pages/user/MyReport.vue');
+const Profile = () => import('../pages/user/Profile.vue'); // [NEW]
 
 // Committee Pages
 const EvaluationList = () => import('../pages/committee/EvaluationList.vue');
@@ -40,13 +40,15 @@ const routes = [
       { path: 'manage-users', component: ManageUsers, meta: { roles: ['admin'] } },
       { path: 'admin/committee-summary', component: CommitteeSummary, meta: { roles: ['admin'] } },
       { path: 'admin/committee-tracking', component: CommitteeTracking, meta: { roles: ['admin'] } },
-      // [2] เพิ่ม Route ตรงนี้ (ให้อยู่ใน children)
       { path: 'admin/evaluatee-tracking', component: EvaluateeTracking, meta: { roles: ['admin'] } },
 
       // User Routes
       { path: 'self-assessment', component: SelfAssessment, meta: { roles: ['user'] } },
       { path: 'my-report', component: MyReport, meta: { roles: ['user'] } },
       
+      // [NEW] Profile Route (เข้าได้ทุกคนที่ Login)
+      { path: 'profile', component: Profile, meta: { roles: ['admin', 'user', 'committee'] } },
+
       // Committee Routes
       { path: 'evaluation-list', component: EvaluationList, meta: { roles: ['committee'] } },
       { path: 'grading/:roundId/:evaluateeId', component: Grading, meta: { roles: ['committee'] } },
@@ -70,7 +72,6 @@ const router = createRouter({
   routes,
 });
 
-// Navigation Guard
 router.beforeEach((to, from, next) => {
   const authStore = useAuthStore();
   const isAuthenticated = authStore.isAuthenticated;

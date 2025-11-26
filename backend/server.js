@@ -1,5 +1,3 @@
-// File: backend/server.js
-
 const express = require("express");
 const cors = require("cors");
 const path = require("path");
@@ -35,5 +33,5 @@ app.get("/", (req, res) => {
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`Backend server is running on port ${PORT}`);
+  console.log(`✅ Backend server is running on port ${PORT}`);
 });

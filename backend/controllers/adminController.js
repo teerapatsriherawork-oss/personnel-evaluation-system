@@ -13,7 +13,6 @@ exports.createRound = async (req, res) => {
         );
         res.status(201).json({ status: 'success', message: 'Round created', data: { id: result.insertId } });
     } catch (error) {
-        console.error("Error creating round:", error);
         res.status(500).json({ status: 'error', message: error.message });
     }
 };
@@ -74,7 +73,6 @@ exports.createTopic = async (req, res) => {
         );
         res.status(201).json({ status: 'success', message: 'Topic created', data: { id: result.insertId } });
     } catch (error) {
-        console.error("Error creating topic:", error);
         res.status(500).json({ status: 'error', message: error.message });
     }
 };
@@ -116,14 +114,12 @@ exports.deleteTopic = async (req, res) => {
 exports.createCriteria = async (req, res) => {
     try {
         const { round_id, topic_id, indicator_name, description = null, max_score, scoring_type, require_evidence = false } = req.body;
-        
         const [result] = await db.execute(
             'INSERT INTO criterias (round_id, topic_id, indicator_name, description, max_score, scoring_type, require_evidence) VALUES (?, ?, ?, ?, ?, ?, ?)',
             [round_id, topic_id, indicator_name, description, max_score, scoring_type, require_evidence]
         );
         res.status(201).json({ status: 'success', message: 'Criteria created', data: { id: result.insertId } });
     } catch (error) {
-        console.error("Error creating criteria:", error);
         res.status(500).json({ status: 'error', message: error.message });
     }
 };
@@ -148,7 +144,6 @@ exports.updateCriteria = async (req, res) => {
     try {
         const { id } = req.params;
         const { topic_id, indicator_name, description, max_score, scoring_type, require_evidence } = req.body;
-        
         await db.execute(
             `UPDATE criterias 
              SET topic_id=?, indicator_name=?, description=?, max_score=?, scoring_type=?, require_evidence=? 
@@ -186,21 +181,17 @@ exports.getAllUsers = async (req, res) => {
 exports.createUser = async (req, res) => {
     try {
         const { username, password, fullname, role } = req.body;
-        
         if(!username || !password || !fullname || !role) {
              return res.status(400).json({ status: 'error', message: 'กรุณากรอกข้อมูลให้ครบถ้วน' });
         }
-
         const salt = await bcrypt.genSalt(10);
         const hash = await bcrypt.hash(password, salt);
-
         const [result] = await db.execute(
             'INSERT INTO users (username, password_hash, fullname, role) VALUES (?, ?, ?, ?)',
             [username, hash, fullname, role]
         );
         res.status(201).json({ status: 'success', message: 'User created', data: { id: result.insertId } });
     } catch (error) {
-        console.error("Create User Error:", error);
         res.status(500).json({ status: 'error', message: error.message });
     }
 };
@@ -209,7 +200,6 @@ exports.updateUser = async (req, res) => {
     try {
         const { id } = req.params;
         const { username, fullname, role, password } = req.body;
-
         if (password && password.trim() !== '') {
             const salt = await bcrypt.genSalt(10);
             const hash = await bcrypt.hash(password, salt);
@@ -245,19 +235,13 @@ exports.deleteUser = async (req, res) => {
 exports.assignCommittee = async (req, res) => {
     try {
         const { round_id, evaluator_id, evaluatee_id, role } = req.body;
-
         const [existing] = await db.execute(
             'SELECT id FROM committees_mapping WHERE round_id = ? AND evaluator_id = ? AND evaluatee_id = ?',
             [round_id, evaluator_id, evaluatee_id]
         );
-
         if (existing.length > 0) {
-            return res.status(400).json({ 
-                status: 'error', 
-                message: 'มีการจับคู่กรรมการและผู้รับการประเมินคู่นี้ไปแล้วในรอบนี้' 
-            });
+            return res.status(400).json({ status: 'error', message: 'Mapping exists' });
         }
-
         const [result] = await db.execute(
             'INSERT INTO committees_mapping (round_id, evaluator_id, evaluatee_id, role) VALUES (?, ?, ?, ?)',
             [round_id, evaluator_id, evaluatee_id, role]
@@ -293,19 +277,6 @@ exports.updateMapping = async (req, res) => {
     try {
         const { id } = req.params;
         const { round_id, evaluator_id, evaluatee_id, role } = req.body;
-
-        const [existing] = await db.execute(
-            'SELECT id FROM committees_mapping WHERE round_id = ? AND evaluator_id = ? AND evaluatee_id = ? AND id != ?',
-            [round_id, evaluator_id, evaluatee_id, id]
-        );
-
-        if (existing.length > 0) {
-            return res.status(400).json({ 
-                status: 'error', 
-                message: 'มีการจับคู่กรรมการและผู้รับการประเมินคู่นี้ไปแล้วในรอบนี้' 
-            });
-        }
-
         await db.execute(
             'UPDATE committees_mapping SET round_id=?, evaluator_id=?, evaluatee_id=?, role=? WHERE id=?',
             [round_id, evaluator_id, evaluatee_id, role, id]
@@ -331,7 +302,6 @@ exports.getDashboardStats = async (req, res) => {
         const [userCount] = await db.execute('SELECT COUNT(*) as total FROM users');
         const [roundCount] = await db.execute('SELECT COUNT(*) as total FROM rounds WHERE status = "open"');
         const [evalCount] = await db.execute('SELECT COUNT(*) as total FROM evaluations');
-        
         res.status(200).json({
             status: 'success',
             data: {
@@ -348,65 +318,40 @@ exports.getDashboardStats = async (req, res) => {
 exports.getCommitteeSummary = async (req, res) => {
     try {
         const { roundId } = req.params;
-
         const [criCount] = await db.execute('SELECT COUNT(*) as total FROM criterias WHERE round_id = ?', [roundId]);
         const totalCriteria = criCount[0].total;
-
         const sql = `
             SELECT
                 cm.id as mapping_id,
                 COALESCE(u_ee.fullname, 'User Deleted') as evaluatee_name,
                 COALESCE(u_er.fullname, 'User Deleted') as evaluator_name,
                 cm.role as committee_role,
-                (
-                    SELECT COUNT(*) 
-                    FROM evaluations e 
-                    WHERE e.round_id = cm.round_id 
-                      AND e.evaluator_id = cm.evaluator_id 
-                      AND e.evaluatee_id = cm.evaluatee_id
-                ) as evaluated_count,
-                (
-                    SELECT COALESCE(SUM(score), 0) 
-                    FROM evaluations e 
-                    WHERE e.round_id = cm.round_id 
-                      AND e.evaluator_id = cm.evaluator_id 
-                      AND e.evaluatee_id = cm.evaluatee_id
-                ) as total_score
+                (SELECT COUNT(*) FROM evaluations e WHERE e.round_id = cm.round_id AND e.evaluator_id = cm.evaluator_id AND e.evaluatee_id = cm.evaluatee_id) as evaluated_count,
+                (SELECT COALESCE(SUM(score), 0) FROM evaluations e WHERE e.round_id = cm.round_id AND e.evaluator_id = cm.evaluator_id AND e.evaluatee_id = cm.evaluatee_id) as total_score
             FROM committees_mapping cm
             LEFT JOIN users u_ee ON cm.evaluatee_id = u_ee.id
             LEFT JOIN users u_er ON cm.evaluator_id = u_er.id
             WHERE cm.round_id = ?
             ORDER BY u_ee.fullname ASC, u_er.fullname ASC
         `;
-
         const [results] = await db.execute(sql, [roundId]);
-
         const data = results.map(row => ({
             ...row,
             total_criteria: totalCriteria,
-            is_complete: totalCriteria > 0 && row.evaluated_count >= totalCriteria,
-            progress_percent: totalCriteria > 0 ? Math.round((row.evaluated_count / totalCriteria) * 100) : 0
+            is_complete: totalCriteria > 0 && row.evaluated_count >= totalCriteria
         }));
-
         res.status(200).json({ status: 'success', data });
-
     } catch (error) {
-        console.error("[DEBUG] Error in getCommitteeSummary:", error);
         res.status(500).json({ status: 'error', message: error.message });
     }
 };
 
-// [UPDATED] Committee Progress
 exports.getCommitteeProgress = async (req, res) => {
     try {
         const { roundId } = req.params;
-        
         const [criCount] = await db.execute('SELECT COUNT(*) as total FROM criterias WHERE round_id = ?', [roundId]);
         const totalCriteriaPerPerson = criCount[0].total;
-
-        if (totalCriteriaPerPerson === 0) {
-             return res.status(200).json({ status: 'success', data: [] });
-        }
+        if (totalCriteriaPerPerson === 0) return res.status(200).json({ status: 'success', data: [] });
 
         const sql = `
             SELECT 
@@ -414,115 +359,112 @@ exports.getCommitteeProgress = async (req, res) => {
                 u.fullname as committee_name,
                 COUNT(cm.evaluatee_id) as total_evaluatees,
                 GROUP_CONCAT(u_ee.fullname SEPARATOR ', ') as evaluatee_list,
-                (
-                    SELECT COUNT(*) 
-                    FROM evaluations e 
-                    WHERE e.evaluator_id = u.id 
-                    AND e.round_id = ?
-                ) as total_evaluations_done
+                (SELECT COUNT(*) FROM evaluations e WHERE e.evaluator_id = u.id AND e.round_id = ?) as total_evaluations_done
             FROM users u
             JOIN committees_mapping cm ON u.id = cm.evaluator_id
             LEFT JOIN users u_ee ON cm.evaluatee_id = u_ee.id
             WHERE cm.round_id = ?
             GROUP BY u.id, u.fullname
         `;
-
         const [rows] = await db.execute(sql, [roundId, roundId]);
-
         const data = rows.map(row => {
             const totalTasks = row.total_evaluatees * totalCriteriaPerPerson;
             const rawProgress = totalTasks > 0 ? (row.total_evaluations_done / totalTasks) * 100 : 0;
-            const progress = Math.min(Math.round(rawProgress), 100);
-            
             return {
-                committee_id: row.committee_id,
-                committee_name: row.committee_name,
-                total_evaluatees: row.total_evaluatees,
-                evaluatee_list: row.evaluatee_list,
+                ...row,
                 total_criteria_per_person: totalCriteriaPerPerson,
-                total_evaluations_done: row.total_evaluations_done,
                 total_tasks: totalTasks,
-                progress: progress,
-                is_complete: progress >= 100
+                progress: Math.min(Math.round(rawProgress), 100),
+                is_complete: rawProgress >= 100
             };
         });
-
         res.status(200).json({ status: 'success', data });
-
     } catch (error) {
-        console.error("Error in getCommitteeProgress:", error);
         res.status(500).json({ status: 'error', message: error.message });
     }
 };
 
-// [NEW] ฟังก์ชันสำหรับติดตามสถานะผู้รับการประเมิน
+// [NEW] ฟังก์ชันนี้ที่ขาดหายไป ทำให้เกิด Error
 exports.getEvaluateeTracking = async (req, res) => {
     try {
         const { roundId } = req.params;
-
-        // 1. หาจำนวนข้อคำถามทั้งหมดในรอบนี้ (เพื่อใช้คำนวณ %)
         const [criRes] = await db.execute('SELECT COUNT(*) as total FROM criterias WHERE round_id = ?', [roundId]);
         const totalCriteria = criRes[0].total;
-
         if (totalCriteria === 0) return res.json({ status: 'success', data: [] });
 
-        // 2. ดึงข้อมูล Users และนับจำนวนการประเมิน
         const sql = `
             SELECT 
                 u.id, 
                 u.fullname,
-                
-                -- นับจำนวนข้อที่ประเมินตนเองไปแล้ว
-                (SELECT COUNT(*) FROM evaluations e 
-                 WHERE e.round_id = ? AND e.evaluatee_id = u.id AND e.evaluator_id = u.id
-                ) as self_done,
-
-                -- นับจำนวนกรรมการที่ดูแล User นี้
-                (SELECT COUNT(*) FROM committees_mapping cm 
-                 WHERE cm.round_id = ? AND cm.evaluatee_id = u.id
-                ) as committee_count,
-
-                -- นับจำนวนข้อรวมทั้งหมดที่กรรมการทุกคนประเมินให้ User นี้
-                (SELECT COUNT(*) FROM evaluations e 
-                 WHERE e.round_id = ? AND e.evaluatee_id = u.id AND e.evaluator_id != u.id
-                ) as committee_eval_total
-
+                (SELECT COUNT(*) FROM evaluations e WHERE e.round_id = ? AND e.evaluatee_id = u.id AND e.evaluator_id = u.id) as self_done,
+                (SELECT COUNT(*) FROM committees_mapping cm WHERE cm.round_id = ? AND cm.evaluatee_id = u.id) as committee_count,
+                (SELECT COUNT(*) FROM evaluations e WHERE e.round_id = ? AND e.evaluatee_id = u.id AND e.evaluator_id != u.id) as committee_eval_total
             FROM users u
             WHERE u.role = 'user'
         `;
-
         const [users] = await db.execute(sql, [roundId, roundId, roundId]);
-
-        // 3. คำนวณสถานะและ Progress
         const data = users.map(u => {
-            // สถานะประเมินตนเอง (ครบตามจำนวนข้อไหม)
-            const isSelfComplete = u.self_done >= totalCriteria;
-            
-            // เป้าหมายจำนวนข้อรวมของกรรมการ (จำนวนกรรมการ * จำนวนข้อ)
             const targetCommitteeEval = u.committee_count * totalCriteria;
-            
-            // คำนวณ % ความคืบหน้าของกรรมการ
-            const committeeProgress = targetCommitteeEval > 0 
-                ? Math.round((u.committee_eval_total / targetCommitteeEval) * 100) 
-                : 0;
-
             return {
                 id: u.id,
                 fullname: u.fullname,
-                self_status: isSelfComplete ? 'Complete' : (u.self_done > 0 ? 'In Progress' : 'Pending'),
+                self_status: u.self_done >= totalCriteria ? 'Complete' : (u.self_done > 0 ? 'In Progress' : 'Pending'),
                 self_done: u.self_done,
                 total_criteria: totalCriteria,
                 committee_count: u.committee_count,
-                committee_progress: committeeProgress, // 0-100%
+                committee_progress: targetCommitteeEval > 0 ? Math.round((u.committee_eval_total / targetCommitteeEval) * 100) : 0,
                 committee_eval_total: u.committee_eval_total,
                 target_committee_eval: targetCommitteeEval
             };
         });
-
         res.status(200).json({ status: 'success', data });
-
     } catch (error) {
-        console.error("Error in getEvaluateeTracking:", error);
+        res.status(500).json({ status: 'error', message: error.message });
+    }
+};
+
+// [NEW] ฟังก์ชันสำหรับดึงผลประเมินของผู้ใช้ (Admin View)
+exports.getUserEvaluations = async (req, res) => {
+    try {
+        const { roundId, userId } = req.params;
+        const [users] = await db.execute('SELECT fullname FROM users WHERE id = ?', [userId]);
+        const userName = users.length > 0 ? users[0].fullname : 'Unknown User';
+
+        const [criterias] = await db.execute(
+            `SELECT c.*, t.topic_name 
+             FROM criterias c
+             JOIN topics t ON c.topic_id = t.id
+             WHERE c.round_id = ?`, 
+            [roundId]
+        );
+
+        const [evaluations] = await db.execute(
+            'SELECT * FROM evaluations WHERE round_id = ? AND evaluatee_id = ?',
+            [roundId, userId]
+        );
+
+        const reportData = criterias.map(c => {
+            const myEval = evaluations.find(e => e.criteria_id === c.id && e.evaluator_id == userId);
+            const committeeEvals = evaluations.filter(e => e.criteria_id === c.id && e.evaluator_id != userId);
+            
+            let committeeScore = 0;
+            if (committeeEvals.length > 0) {
+                const totalScore = committeeEvals.reduce((sum, e) => sum + Number(e.score || 0), 0);
+                committeeScore = (totalScore / committeeEvals.length).toFixed(2);
+            }
+
+            return {
+                id: c.id,
+                topic_name: c.topic_name,
+                indicator_name: c.indicator_name,
+                self_score: myEval ? myEval.score : 0,
+                committee_score: committeeScore,
+                committee_comment: committeeEvals.length > 0 ? committeeEvals[0].comment : ''
+            };
+        });
+
+        res.status(200).json({ status: 'success', data: reportData, user_name: userName });
+    } catch (error) {
         res.status(500).json({ status: 'error', message: error.message });
     }
 };

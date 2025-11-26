@@ -186,7 +186,7 @@ const evaluateeId = ref(route.params.evaluateeId);
 
 const criterias = ref([]);
 const formModels = reactive({});
-const signatureFile = ref([]);
+const signatureFile = ref([]); 
 const existingSignature = ref(null);
 const loading = ref(true);
 const submitLoading = ref(false);
@@ -207,6 +207,16 @@ const getExternalLink = (url) => {
   return url;
 };
 
+// [เพิ่ม] ฟังก์ชันแปลงไฟล์เป็น Base64 เพื่อส่งไป Backend
+const fileToBase64 = (file) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = error => reject(error);
+    reader.readAsDataURL(file);
+  });
+};
+
 onMounted(async () => {
   await fetchData();
 });
@@ -217,7 +227,6 @@ const fetchData = async () => {
     const res = await api.get(`/committee/grading/${roundId.value}/${evaluateeId.value}`);
     criterias.value = res.data.data;
     
-    // เช็คว่ามีลายเซ็นในการประเมินรอบนี้แล้วหรือยัง (ถ้าไม่มีค่อยดึงจาก Profile)
     if (criterias.value.length > 0) {
       const firstItem = criterias.value[0];
       if (firstItem.my_evidence_file) {
@@ -246,17 +255,15 @@ const handleSubmitGrading = async () => {
   submitLoading.value = true;
   
   try {
-    let signaturePath = existingSignature.value;
+    let signaturePath = existingSignature.value; // ค่าเริ่มต้นคือ Path เดิม (ถ้ามี)
     
-    // ถ้าอัปโหลดใหม่ ให้ใช้ไฟล์ใหม่
+    // [NEW LOGIC] ถ้ามีการเลือกไฟล์ใหม่ ให้แปลงเป็น Base64 string
     if (signatureFile.value && signatureFile.value.length > 0) {
-      const formData = new FormData();
-      formData.append('file', signatureFile.value[0]);
+      const file = signatureFile.value[0];
+      console.log("Converting file:", file.name);
       
-      // [FIXED] ลบ headers ออกเพื่อให้ Browser จัดการ Boundary เอง
-      const uploadRes = await api.post('/upload', formData);
-      
-      signaturePath = uploadRes.data.data.path;
+      // แปลงเป็น Base64 (เช่น "data:image/png;base64,....")
+      signaturePath = await fileToBase64(file);
     }
     
     const promises = criterias.value.map(c => {
@@ -268,7 +275,7 @@ const handleSubmitGrading = async () => {
         comment: formModels[c.id].comment,
       };
       
-      // แนบไฟล์ลายเซ็นไปเฉพาะข้อแรก (เพื่อประหยัด DB)
+      // แนบไฟล์ (Base64 หรือ Path เดิม) ไปเฉพาะข้อแรก เพื่อไม่ให้ Payload ใหญ่เกินไป
       if (c.id === criterias.value[0].id) {
         payload.evidence_file = signaturePath;
       }
@@ -285,7 +292,7 @@ const handleSubmitGrading = async () => {
     }, 1500);
 
   } catch (error) {
-    console.error(error);
+    console.error("Submit Error:", error);
     showSnackbar(error.response?.data?.message || 'เกิดข้อผิดพลาดในการบันทึก', 'error');
   } finally {
     submitLoading.value = false;

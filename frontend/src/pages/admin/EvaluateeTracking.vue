@@ -6,7 +6,6 @@
           <v-icon start>mdi-account-search</v-icon>
           ติดตามผู้รับการประเมิน
         </h1>
-        <p class="text-subtitle-1 text-grey-darken-1">ตรวจสอบสถานะการประเมินตนเองและความคืบหน้าของกรรมการต่อบุคลากร</p>
       </v-col>
     </v-row>
 
@@ -40,62 +39,34 @@
         </template>
 
         <template v-slot:[`item.self_status`]="{ item }">
-          <v-chip
-            :color="getSelfStatusColor(item.self_status)"
-            size="small"
-            class="font-weight-bold"
-            label
-          >
-            <v-icon start size="small">
-              {{ item.self_status === 'Complete' ? 'mdi-check-circle' : 'mdi-clock-outline' }}
-            </v-icon>
-            {{ item.self_status === 'Complete' ? 'เรียบร้อย' : (item.self_status === 'In Progress' ? 'กำลังทำ' : 'ยังไม่เริ่ม') }}
+          <v-chip :color="getSelfStatusColor(item.self_status)" size="small" label>
+            {{ item.self_status }}
           </v-chip>
           <div class="text-caption text-grey mt-1">
-            ทำไป {{ item.self_done }} / {{ item.total_criteria }} ข้อ
+            {{ item.self_done }} / {{ item.total_criteria }} ข้อ
           </div>
         </template>
 
         <template v-slot:[`item.committee_progress`]="{ item }">
-          <div class="d-flex flex-column py-2" style="min-width: 150px;">
-            <div class="d-flex align-center w-100">
-                <v-progress-linear
-                  :model-value="item.committee_progress"
-                  :color="getProgressColor(item.committee_progress)"
-                  height="18"
-                  rounded
-                  striped
-                >
-                  <template v-slot:default="{ value }">
-                    <strong class="text-white text-caption" style="font-size: 10px;">{{ Math.ceil(value) }}%</strong>
-                  </template>
-                </v-progress-linear>
-            </div>
-            <div class="text-caption text-grey mt-1">
-               กรรมการ {{ item.committee_count }} ท่าน <br>
-               (ประเมินแล้ว {{ item.committee_eval_total }} / {{ item.target_committee_eval }} ข้อ)
-            </div>
-          </div>
+          <v-progress-linear :model-value="item.committee_progress" :color="getProgressColor(item.committee_progress)" height="15" striped rounded>
+             <template v-slot:default="{ value }"><strong>{{ Math.ceil(value) }}%</strong></template>
+          </v-progress-linear>
+          <div class="text-caption text-grey mt-1">กรรมการ {{ item.committee_count }} คน</div>
         </template>
 
         <template v-slot:[`item.overall`]="{ item }">
-            <v-icon 
-                v-if="item.self_status === 'Complete' && item.committee_progress >= 100" 
-                color="success" 
-                size="large"
+            <v-btn 
+                size="small" 
+                variant="outlined" 
+                color="primary"
+                :to="`/admin/report/${selectedRoundId}/${item.id}`"
+                prepend-icon="mdi-file-document-outline"
             >
-                mdi-check-decagram
-            </v-icon>
-            <span v-else class="text-grey text-caption">รอครบถ้วน</span>
+                ดูรายงาน
+            </v-btn>
         </template>
-
       </v-data-table>
     </v-card>
-
-    <div v-else class="text-center py-10 text-grey-lighten-1">
-      <v-icon size="64" class="mb-2">mdi-clipboard-text-search</v-icon>
-      <div>กรุณาเลือกรอบการประเมินเพื่อดูข้อมูล</div>
-    </div>
   </v-container>
 </template>
 
@@ -109,45 +80,28 @@ const trackingData = ref([]);
 const loading = ref(false);
 
 const headers = [
-  { title: 'ผู้รับการประเมิน', key: 'fullname', align: 'start', width: '25%' },
-  { title: 'ประเมินตนเอง (User)', key: 'self_status', align: 'center', width: '25%' },
-  { title: 'การประเมินโดยกรรมการ', key: 'committee_progress', align: 'start', width: '35%' },
-  { title: 'สมบูรณ์', key: 'overall', align: 'center', width: '15%' },
+  { title: 'ผู้รับการประเมิน', key: 'fullname', width: '25%' },
+  { title: 'ประเมินตนเอง', key: 'self_status', align: 'center', width: '20%' },
+  { title: 'กรรมการ', key: 'committee_progress', width: '35%' },
+  { title: 'Action', key: 'overall', align: 'center', width: '20%' },
 ];
 
 onMounted(async () => {
-  try {
-    const res = await api.get('/admin/rounds');
-    rounds.value = res.data.data;
-  } catch (error) {
-    console.error('Error fetching rounds:', error);
-  }
+  const res = await api.get('/admin/rounds');
+  rounds.value = res.data.data;
 });
 
 const fetchTracking = async () => {
   if (!selectedRoundId.value) return;
-  
   loading.value = true;
   try {
     const res = await api.get(`/admin/evaluatee-tracking/${selectedRoundId.value}`);
     trackingData.value = res.data.data;
-  } catch (error) {
-    console.error('Error fetching tracking data:', error);
-    trackingData.value = [];
   } finally {
     loading.value = false;
   }
 };
 
-const getSelfStatusColor = (status) => {
-  if (status === 'Complete') return 'success';
-  if (status === 'In Progress') return 'warning';
-  return 'error';
-};
-
-const getProgressColor = (progress) => {
-  if (progress >= 100) return 'success';
-  if (progress >= 50) return 'info';
-  return 'orange';
-};
+const getSelfStatusColor = (status) => status === 'Complete' ? 'success' : (status === 'In Progress' ? 'warning' : 'error');
+const getProgressColor = (p) => p >= 100 ? 'success' : 'orange';
 </script>

@@ -1,45 +1,95 @@
 const db = require('../config/database');
 const fs = require('fs');
 const path = require('path');
+const bcrypt = require('bcryptjs'); // ต้องมี bcryptjs
 
 // Helper: แปลง Base64 เป็นไฟล์ลง Disk
 const saveBase64ToFile = (base64String) => {
     if (!base64String || !base64String.startsWith('data:')) return base64String;
 
     try {
-        // แยก Header ออก (เช่น data:image/png;base64,)
         const matches = base64String.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
         if (!matches || matches.length !== 3) {
-            return base64String; // รูปแบบไม่ถูกต้อง คืนค่าเดิมไป
+            return base64String;
         }
 
         const type = matches[1];
         const data = Buffer.from(matches[2], 'base64');
         
-        // สร้างนามสกุลไฟล์
         let extension = 'bin';
         if (type.includes('jpeg') || type.includes('jpg')) extension = 'jpg';
         else if (type.includes('png')) extension = 'png';
         else if (type.includes('pdf')) extension = 'pdf';
 
-        // สร้างชื่อไฟล์สุ่ม
         const filename = `upload-${Date.now()}-${Math.round(Math.random() * 1E9)}.${extension}`;
         const uploadDir = path.join(__dirname, '../uploads');
         
-        // ตรวจสอบว่ามีโฟลเดอร์ uploads ไหม
         if (!fs.existsSync(uploadDir)){
             fs.mkdirSync(uploadDir, { recursive: true });
         }
 
-        // บันทึกลงเครื่อง
         fs.writeFileSync(path.join(uploadDir, filename), data);
-        
-        console.log(`[Base64] Saved file to: /uploads/${filename}`);
-        return `/uploads/${filename}`; // คืนค่าเป็น Path เพื่อบันทึกลง DB
+        return `/uploads/${filename}`;
 
     } catch (error) {
         console.error("[Base64] Error saving file:", error);
         return null;
+    }
+};
+
+// [NEW] ดึงข้อมูลส่วนตัว (Profile)
+exports.getProfile = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const [users] = await db.execute(
+            'SELECT id, username, fullname, role, signature_path, email, phone, position, department FROM users WHERE id = ?',
+            [userId]
+        );
+        if (users.length === 0) return res.status(404).json({ status: 'error', message: 'User not found' });
+        
+        res.status(200).json({ status: 'success', data: users[0] });
+    } catch (error) {
+        res.status(500).json({ status: 'error', message: error.message });
+    }
+};
+
+// [NEW] อัปเดตข้อมูลส่วนตัว
+exports.updateProfile = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        let { fullname, email, phone, position, department, signature_file, password } = req.body;
+
+        // จัดการรูปภาพลายเซ็น (ถ้าส่งมาเป็น Base64)
+        if (signature_file && signature_file.startsWith('data:')) {
+            signature_file = saveBase64ToFile(signature_file);
+        }
+
+        let sql = 'UPDATE users SET fullname=?, email=?, phone=?, position=?, department=?';
+        let params = [fullname, email, phone, position, department];
+
+        // ถ้ามีการเปลี่ยนลายเซ็น
+        if (signature_file) {
+            sql += ', signature_path=?';
+            params.push(signature_file);
+        }
+
+        // ถ้ามีการเปลี่ยนรหัสผ่าน
+        if (password && password.trim() !== '') {
+            const salt = await bcrypt.genSalt(10);
+            const hash = await bcrypt.hash(password, salt);
+            sql += ', password_hash=?';
+            params.push(hash);
+        }
+
+        sql += ' WHERE id=?';
+        params.push(userId);
+
+        await db.execute(sql, params);
+
+        res.status(200).json({ status: 'success', message: 'Profile updated successfully' });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ status: 'error', message: error.message });
     }
 };
 
@@ -49,8 +99,6 @@ exports.submitSelfAssessment = async (req, res) => {
         const userId = req.user.id;
         let { round_id, criteria_id, score, evidence_file, evidence_url, comment } = req.body;
 
-        // [NEW] จัดการแปลง Base64 เป็นไฟล์ (ถ้ามีการส่งมาแบบ Base64)
-        // เพื่อให้ Database เก็บแค่ Path สั้นๆ ไม่ error 'Data too long'
         if (evidence_file && evidence_file.startsWith('data:')) {
             evidence_file = saveBase64ToFile(evidence_file);
         }
@@ -61,7 +109,6 @@ exports.submitSelfAssessment = async (req, res) => {
         );
 
         if (existing.length > 0) {
-            // ถ้าเป็น null (เช่น saveBase64ToFile error) ไม่ต้องอัปเดต field นั้น
             let sql = 'UPDATE evaluations SET score=?, evidence_url=?, comment=?';
             let params = [score, evidence_url, comment];
 
@@ -88,13 +135,12 @@ exports.submitSelfAssessment = async (req, res) => {
     }
 };
 
-// [FIX] แก้ไขฟังก์ชันนี้: ดึงผลประเมินทั้งหมดของฉัน (ทั้งที่ประเมินเอง และกรรมการประเมินให้)
+// Get My Evaluations
 exports.getMyEvaluations = async (req, res) => {
     try {
         const userId = req.user.id;
         const { roundId } = req.params;
         
-        // เอาเงื่อนไข evaluator_id = ? ออก เพื่อให้เห็นคะแนนที่คนอื่นประเมินเราด้วย
         const [evaluations] = await db.execute(
             'SELECT * FROM evaluations WHERE evaluatee_id = ? AND round_id = ?',
             [userId, roundId]
@@ -105,7 +151,7 @@ exports.getMyEvaluations = async (req, res) => {
     }
 };
 
-// Public Progress (คงเดิม)
+// Public Progress
 exports.getPublicProgress = async (req, res) => {
     try {
         const [rounds] = await db.execute("SELECT id, round_name FROM rounds WHERE status = 'open' LIMIT 1");
