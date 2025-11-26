@@ -31,8 +31,8 @@
       <v-table class="elevation-2 border mb-6">
         <thead>
           <tr class="bg-grey-lighten-3">
-            <th width="35%" class="font-weight-bold">หัวข้อ / ตัวชี้วัด</th>
-            <th width="25%" class="font-weight-bold text-center">ประเมินตนเอง (User)</th>
+            <th width="30%" class="font-weight-bold">หัวข้อ / ตัวชี้วัด</th>
+            <th width="30%" class="font-weight-bold text-center">ประเมินตนเอง (User)</th>
             <th width="40%" class="font-weight-bold text-center">ส่วนของกรรมการ</th>
           </tr>
         </thead>
@@ -54,38 +54,30 @@
                 <div v-if="c.self_comment" class="text-caption text-grey font-italic mt-2 pa-2 bg-grey-lighten-5 rounded">
                   "{{ c.self_comment }}"
                 </div>
+                <div class="d-flex flex-column gap-2 align-center mt-2">
+                  <v-btn v-if="c.self_evidence_url" :href="getExternalLink(c.self_evidence_url)" target="_blank" size="small" prepend-icon="mdi-link" variant="flat" color="blue-darken-1" class="text-white w-100" style="max-width: 200px;">
+                    เปิดลิงก์แนบ
+                  </v-btn>
+                  <v-btn v-if="c.self_evidence_file" :href="getFileUrl(c.self_evidence_file)" target="_blank" size="small" prepend-icon="mdi-file-eye" variant="flat" color="teal-darken-1" class="text-white w-100" style="max-width: 200px;">
+                    ดูไฟล์แนบ
+                  </v-btn>
+                </div>
               </div>
-              <div v-else class="text-grey text-caption py-2">- รอการประเมิน -</div>
-
-              <div class="d-flex flex-column gap-2 align-center mt-2">
-                <v-btn v-if="c.self_evidence_url" 
-                  :href="getExternalLink(c.self_evidence_url)" 
-                  target="_blank" 
-                  size="small" 
-                  prepend-icon="mdi-link" 
-                  variant="flat" 
-                  color="blue-darken-1" 
-                  class="text-white w-100"
-                  style="max-width: 200px;">
-                  เปิดลิงก์แนบ
-                </v-btn>
-
-                <v-btn v-if="c.self_evidence_file" 
-                  :href="getFileUrl(c.self_evidence_file)" 
-                  target="_blank" 
-                  size="small" 
-                  prepend-icon="mdi-file-eye" 
-                  variant="flat" 
-                  color="teal-darken-1" 
-                  class="text-white w-100"
-                  style="max-width: 200px;">
-                  ดูไฟล์แนบ
-                </v-btn>
+              <div v-else class="text-grey text-caption py-4 border-dashed rounded">
+                - ยังไม่มีการประเมินตนเอง -
               </div>
             </td>
 
             <td class="align-top bg-grey-lighten-5 px-4 py-3">
-              <div class="mb-2 font-weight-bold text-caption text-grey-darken-2">คะแนนที่ให้:</div>
+              <div class="d-flex justify-space-between align-center mb-2">
+                 <div class="font-weight-bold text-caption text-grey-darken-2">คะแนนที่ให้:</div>
+                 
+                 <div v-if="c.my_score !== null" class="text-caption text-success font-weight-bold">
+                    <v-icon start size="x-small" color="success">mdi-check-circle</v-icon>
+                    บันทึกแล้ว: {{ c.my_score }}
+                 </div>
+              </div>
+
               <v-radio-group v-model="formModels[c.id].score" inline density="compact" hide-details class="mb-2">
                 <template v-if="c.scoring_type === 'scale'">
                   <v-radio v-for="n in 4" :key="n" :label="n.toString()" :value="n" color="primary"></v-radio>
@@ -124,14 +116,7 @@
                   <div class="text-caption text-grey-darken-1">ระบบจะใช้ลายเซ็นเดิมนี้</div>
                 </div>
                 <v-spacer></v-spacer>
-                <v-btn 
-                  :href="getFileUrl(existingSignature)" 
-                  target="_blank" 
-                  variant="elevated" 
-                  size="small" 
-                  color="success"
-                  prepend-icon="mdi-eye"
-                >
+                <v-btn :href="getFileUrl(existingSignature)" target="_blank" variant="elevated" size="small" color="success" prepend-icon="mdi-eye">
                   ดูลายเซ็น
                 </v-btn>
               </div>
@@ -207,7 +192,6 @@ const getExternalLink = (url) => {
   return url;
 };
 
-// [เพิ่ม] ฟังก์ชันแปลงไฟล์เป็น Base64 เพื่อส่งไป Backend
 const fileToBase64 = (file) => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -236,9 +220,12 @@ const fetchData = async () => {
       }
     }
 
+    // [Updated] Logic การดึงค่าเริ่มต้น
     criterias.value.forEach(c => {
+      const hasScore = c.my_score !== null && c.my_score !== undefined;
       formModels[c.id] = {
-        score: Number(c.my_score) || 0,
+        // ใช้ null หากไม่มีคะแนน เพื่อไม่ให้ Radio ถูกเลือกผิด (โดยเฉพาะกรณี Boolean 0)
+        score: hasScore ? Number(c.my_score) : null, 
         comment: c.my_comment || '',
       };
     });
@@ -255,27 +242,25 @@ const handleSubmitGrading = async () => {
   submitLoading.value = true;
   
   try {
-    let signaturePath = existingSignature.value; // ค่าเริ่มต้นคือ Path เดิม (ถ้ามี)
+    let signaturePath = existingSignature.value; 
     
-    // [NEW LOGIC] ถ้ามีการเลือกไฟล์ใหม่ ให้แปลงเป็น Base64 string
     if (signatureFile.value && signatureFile.value.length > 0) {
       const file = signatureFile.value[0];
-      console.log("Converting file:", file.name);
-      
-      // แปลงเป็น Base64 (เช่น "data:image/png;base64,....")
       signaturePath = await fileToBase64(file);
     }
     
     const promises = criterias.value.map(c => {
+      // ตรวจสอบว่ามีการให้คะแนนหรือไม่ ถ้า formModels[c.id].score เป็น null แสดงว่ายังไม่ได้เลือก
+      const scoreToSend = formModels[c.id].score !== null ? formModels[c.id].score : 0; // ส่ง 0 หากยังไม่เลือก (หรือจะ Handle Validation ก็ได้)
+
       const payload = {
         round_id: roundId.value,
         criteria_id: c.id,
         evaluatee_id: evaluateeId.value,
-        score: formModels[c.id].score,
+        score: scoreToSend,
         comment: formModels[c.id].comment,
       };
       
-      // แนบไฟล์ (Base64 หรือ Path เดิม) ไปเฉพาะข้อแรก เพื่อไม่ให้ Payload ใหญ่เกินไป
       if (c.id === criterias.value[0].id) {
         payload.evidence_file = signaturePath;
       }

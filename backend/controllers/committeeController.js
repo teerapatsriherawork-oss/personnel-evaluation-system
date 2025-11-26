@@ -4,7 +4,7 @@ const db = require('../config/database');
 const fs = require('fs');
 const path = require('path');
 
-// Helper สำหรับแปลง Base64 เป็นไฟล์ (ใช้สำหรับบันทึกลายเซ็น)
+// Helper สำหรับแปลง Base64 เป็นไฟล์
 const saveBase64ToFile = (base64String) => {
     if (!base64String || !base64String.startsWith('data:')) return base64String;
     try {
@@ -33,11 +33,9 @@ exports.getEvaluatees = async (req, res) => {
         const evaluatorId = req.user.id;
         const { roundId } = req.params;
 
-        // หาจำนวนข้อทั้งหมดของรอบนี้ (เพื่อคำนวณสถานะความคืบหน้า)
         const [criCount] = await db.execute('SELECT COUNT(*) as total FROM criterias WHERE round_id = ?', [roundId]);
         const totalCriteria = criCount[0].total;
 
-        // ดึงรายชื่อจากตาราง Mapping
         const sql = `
             SELECT 
                 u.id, 
@@ -56,7 +54,6 @@ exports.getEvaluatees = async (req, res) => {
         
         const [rows] = await db.execute(sql, [roundId, evaluatorId]);
 
-        // Map ข้อมูลเพื่อบอกสถานะ (Completed / In Progress / Pending)
         const evaluatees = rows.map(row => {
             let status = 'pending';
             if (totalCriteria > 0) {
@@ -86,7 +83,7 @@ exports.getGradingInfo = async (req, res) => {
         const evaluatorId = req.user.id;
         const { roundId, evaluateeId } = req.params;
 
-        // ดึง Criteria ทั้งหมดในรอบนี้
+        // ดึง Criteria
         const sql = `
             SELECT c.*, t.topic_name
             FROM criterias c
@@ -96,19 +93,19 @@ exports.getGradingInfo = async (req, res) => {
         `;
         const [criterias] = await db.execute(sql, [roundId]);
 
-        // ดึงคะแนนประเมินตนเองของ User (Self Assessment)
+        // ดึงคะแนนประเมินตนเอง (User Self Assessment)
         const [selfEvals] = await db.execute(
             'SELECT * FROM evaluations WHERE round_id = ? AND evaluatee_id = ? AND evaluator_id = ?',
             [roundId, evaluateeId, evaluateeId]
         );
 
-        // ดึงคะแนนที่กรรมการคนนี้เคยให้ไปแล้ว (ถ้ามี)
+        // ดึงคะแนนที่กรรมการคนนี้เคยให้ไปแล้ว (Committee Evaluation)
         const [myEvals] = await db.execute(
             'SELECT * FROM evaluations WHERE round_id = ? AND evaluatee_id = ? AND evaluator_id = ?',
             [roundId, evaluateeId, evaluatorId]
         );
 
-        // ดึงลายเซ็นล่าสุดที่กรรมการเคยแนบ (ถ้ามี)
+        // ดึงลายเซ็นเดิม
         let profileSignature = null;
         const lastEvalWithFile = myEvals.find(e => e.evidence_file);
         if (lastEvalWithFile) profileSignature = lastEvalWithFile.evidence_file;
@@ -119,8 +116,8 @@ exports.getGradingInfo = async (req, res) => {
         }
 
         const data = criterias.map(c => {
-            const self = selfEvals.find(e => e.criteria_id === c.id) || {};
-            const my = myEvals.find(e => e.criteria_id === c.id) || {};
+            const self = selfEvals.find(e => e.criteria_id === c.id);
+            const my = myEvals.find(e => e.criteria_id === c.id);
 
             return {
                 id: c.id,
@@ -129,13 +126,18 @@ exports.getGradingInfo = async (req, res) => {
                 description: c.description,
                 max_score: c.max_score,
                 scoring_type: c.scoring_type,
-                self_score: self.score || null,
-                self_comment: self.comment || null,
-                self_evidence_url: self.evidence_url || null,
-                self_evidence_file: self.evidence_file || null,
-                my_score: my.score || null,
-                my_comment: my.comment || '',
-                my_evidence_file: my.evidence_file || null,
+                
+                // ข้อมูลประเมินตนเอง
+                self_score: (self && self.score != null) ? self.score : null,
+                self_comment: self ? self.comment : null,
+                self_evidence_url: self ? self.evidence_url : null,
+                self_evidence_file: self ? self.evidence_file : null,
+                
+                // ข้อมูลที่กรรมการเคยประเมินไว้
+                // ใช้ != null เพื่อดักทั้ง null และ undefined แต่ยอมให้ 0 ผ่าน
+                my_score: (my && my.score != null) ? my.score : null,
+                my_comment: my ? my.comment : '',
+                my_evidence_file: my ? my.evidence_file : null,
                 profile_signature: profileSignature 
             };
         });
@@ -148,7 +150,7 @@ exports.getGradingInfo = async (req, res) => {
     }
 };
 
-// 3. บันทึกการให้คะแนน (Submit Grading)
+// 3. บันทึกการให้คะแนน
 exports.submitGrading = async (req, res) => {
     try {
         const evaluatorId = req.user.id;
