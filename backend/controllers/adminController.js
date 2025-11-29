@@ -414,34 +414,49 @@ exports.getEvaluateeTracking = async (req, res) => {
     }
 };
 
-// [NEW] ฟังก์ชันสำหรับดึงผลประเมินของผู้ใช้ (Admin View)
+// [UPDATED] ฟังก์ชันสำหรับดึงผลประเมินรายบุคคล (Admin View) - แก้ไข JOIN เป็น LEFT JOIN
 exports.getUserEvaluations = async (req, res) => {
     try {
         const { roundId, userId } = req.params;
-        const [users] = await db.execute('SELECT fullname FROM users WHERE id = ?', [userId]);
-        const userName = users.length > 0 ? users[0].fullname : 'Unknown User';
+        
+        // 1. ดึงข้อมูล User
+        const [users] = await db.execute('SELECT fullname, position, department FROM users WHERE id = ?', [userId]);
+        const user = users[0] || { fullname: 'Unknown User' };
 
+        // 2. ดึงข้อมูล Round
+        const [rounds] = await db.execute('SELECT round_name FROM rounds WHERE id = ?', [roundId]);
+        const round = rounds[0] || { round_name: 'Unknown Round' };
+
+        // 3. ดึงเกณฑ์ (Criterias) [Fixed: ใช้ LEFT JOIN เพื่อป้องกันข้อมูลหาย]
         const [criterias] = await db.execute(
-            `SELECT c.*, t.topic_name 
+            `SELECT c.*, COALESCE(t.topic_name, 'ไม่ระบุหัวข้อ') as topic_name 
              FROM criterias c
-             JOIN topics t ON c.topic_id = t.id
+             LEFT JOIN topics t ON c.topic_id = t.id
              WHERE c.round_id = ?`, 
             [roundId]
         );
 
+        // 4. ดึงคะแนนดิบ (Evaluations)
         const [evaluations] = await db.execute(
             'SELECT * FROM evaluations WHERE round_id = ? AND evaluatee_id = ?',
             [roundId, userId]
         );
 
+        // 5. ประมวลผลรวมคะแนน
         const reportData = criterias.map(c => {
             const myEval = evaluations.find(e => e.criteria_id === c.id && e.evaluator_id == userId);
             const committeeEvals = evaluations.filter(e => e.criteria_id === c.id && e.evaluator_id != userId);
             
             let committeeScore = 0;
+            let committeeComment = '';
+
             if (committeeEvals.length > 0) {
                 const totalScore = committeeEvals.reduce((sum, e) => sum + Number(e.score || 0), 0);
                 committeeScore = (totalScore / committeeEvals.length).toFixed(2);
+                
+                // เอาคอมเมนต์จากกรรมการคนแรกที่มีคอมเมนต์
+                const commentEval = committeeEvals.find(e => e.comment);
+                if (commentEval) committeeComment = commentEval.comment;
             }
 
             return {
@@ -450,12 +465,22 @@ exports.getUserEvaluations = async (req, res) => {
                 indicator_name: c.indicator_name,
                 self_score: myEval ? myEval.score : 0,
                 committee_score: committeeScore,
-                committee_comment: committeeEvals.length > 0 ? committeeEvals[0].comment : ''
+                committee_comment: committeeComment
             };
         });
 
-        res.status(200).json({ status: 'success', data: reportData, user_name: userName });
+        // ส่งข้อมูลกลับตามโครงสร้างที่ Frontend คาดหวัง
+        res.status(200).json({ 
+            status: 'success', 
+            data: {
+                report: reportData,
+                user: user,
+                round: round
+            }
+        });
+
     } catch (error) {
+        console.error("Get Report Error:", error);
         res.status(500).json({ status: 'error', message: error.message });
     }
 };

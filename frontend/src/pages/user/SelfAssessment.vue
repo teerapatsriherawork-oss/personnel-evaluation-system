@@ -61,7 +61,7 @@
 
           <v-expansion-panel-text>
             <v-divider class="mb-4"></v-divider>
-            <!-- Pass criteria object to submitItem -->
+            
             <v-form @submit.prevent="submitItem(criteria)">
               <v-row>
                 <v-col cols="12" md="7">
@@ -112,12 +112,11 @@
                         <v-icon color="success" class="mr-3">mdi-file-check</v-icon>
                         <div class="mr-auto">
                             <div class="text-success font-weight-bold">มีไฟล์แนบแล้ว</div>
-                            <!-- แสดงว่าเป็น path หรือ base64 (คร่าวๆ) -->
                             <div class="text-caption text-grey-darken-1">
                               {{ formModels[criteria.id].evidence_file.startsWith('data:') ? 'ไฟล์ใหม่ (รอ Save)' : 'ไฟล์เดิมที่บันทึกแล้ว' }}
                             </div>
                         </div>
-                        <!-- ปุ่มกดดูไฟล์ (จะทำงานได้เฉพาะถ้าเป็น URL path เดิม) -->***
+                        
                         <v-btn
                             v-if="!formModels[criteria.id].evidence_file.startsWith('data:')"
                             :href="getFileUrl(formModels[criteria.id].evidence_file)"
@@ -180,6 +179,11 @@
     <div v-else-if="selectedRoundId" class="text-center py-5 text-grey">
       ไม่พบเกณฑ์การประเมินในรอบนี้
     </div>
+    
+    <div v-else class="text-center py-10 text-grey-lighten-1">
+      <v-icon size="64" class="mb-3">mdi-clipboard-text-search-outline</v-icon>
+      <div>กรุณาเลือกรอบการประเมินเพื่อเริ่มทำรายการ</div>
+    </div>
 
     <v-snackbar v-model="snackbar.show" :color="snackbar.color" timeout="3000">
       {{ snackbar.message }}
@@ -213,9 +217,11 @@ const getFileUrl = (path) => {
 onMounted(async () => {
   try {
     const res = await api.get('/admin/rounds');
+    // กรองเฉพาะรอบที่สถานะเป็น 'open' เท่านั้น
     rounds.value = res.data.data.filter(r => r.status === 'open');
   } catch (error) {
     console.error(error);
+    showSnackbar('ไม่สามารถโหลดรอบการประเมินได้', 'error');
   }
 });
 
@@ -224,109 +230,108 @@ const fetchCriterias = async () => {
   
   loading.value = true;
   try {
+    // 1. ดึงเกณฑ์ทั้งหมดของรอบนี้
     const criRes = await api.get(`/admin/rounds/${selectedRoundId.value}/criterias`);
     const fetchedCriterias = criRes.data.data;
 
+    // 2. ดึงข้อมูลที่ User เคยประเมินไว้แล้ว (ถ้ามี)
     const evalRes = await api.get(`/user/evaluations/${selectedRoundId.value}`);
     const myEvals = evalRes.data.data || [];
 
+    // 3. Map ข้อมูลเข้าด้วยกัน
     criterias.value = fetchedCriterias.map(c => {
       const existing = myEvals.find(e => 
         e.criteria_id == c.id && 
         e.evaluator_id == authStore.user.id
       );
       
+      // Initialize form model
       formModels[c.id] = {
-        score: existing ? Number(existing.score) : 0,
+        score: existing ? Number(existing.score) : null,
         comment: existing?.comment || '',
         evidence_url: existing?.evidence_url || '',
         evidence_file: existing?.evidence_file || ''
       };
 
+      // Initialize file input ref
+      fileInputs[c.id] = []; 
+
       return {
         ...c,
-        isSubmitted: !!existing
+        isSubmitted: !!existing // Flag ไว้โชว์ icon ติ๊กถูก
       };
     });
 
   } catch (error) {
     console.error(error);
-    snackbar.message = 'โหลดข้อมูลล้มเหลว';
-    snackbar.color = 'error';
-    snackbar.show = true;
+    showSnackbar('โหลดข้อมูลเกณฑ์ล้มเหลว', 'error');
   } finally {
     loading.value = false;
   }
 };
 
-// [Updated] ฟังก์ชันใหม่จากเพื่อนคุณ
+const fileToBase64 = (file) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = error => reject(error);
+    reader.readAsDataURL(file);
+  });
+};
+
 const submitItem = async (criteria) => {
   const cId = criteria.id;
   loadingIds[cId] = true;
 
   try {
+    // 1. ตรวจสอบว่ามีการเลือกไฟล์ใหม่หรือไม่
+    // หมายเหตุ: Vuetify 3 v-file-input จะ return เป็น Array แม้จะเลือกไฟล์เดียว
+    const rawFileInput = fileInputs[cId];
+    const fileObj = Array.isArray(rawFileInput) && rawFileInput.length > 0 ? rawFileInput[0] : rawFileInput;
 
-    console.log("formModels : " , formModels)
+    let fileString = undefined; // เริ่มต้นเป็น undefined (สำคัญ: ห้ามเป็น "")
 
-    let filePath = formModels[cId].evidence_file; // เริ่มต้นด้วยค่าเดิม
+    if (fileObj && fileObj instanceof File) {
+      // กรณีมีไฟล์ใหม่ -> แปลงเป็น Base64
+      fileString = await fileToBase64(fileObj);
+    } 
+    // ถ้าไม่มีไฟล์ใหม่ ให้ปล่อยเป็น undefined เพื่อให้ Backend รู้ว่าไม่ต้องอัปเดตฟิลด์นี้ (ใช้ไฟล์เดิม)
 
-    let fileString = "";
-
-
-    console.log("filePath:",filePath)
-
-
-    // ถ้ามีการเลือกไฟล์ใหม่ -> อัปโหลด
-    const file = fileInputs[cId]; 
-
-    const fileToBase64 = async (file) => {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = error => reject(error);
-        reader.readAsDataURL(file);
-      });
-    };
-
- if (file && file instanceof File) { 
-      console.log("Uploading new file...");
-      
-      fileString = await fileToBase64(file);
-      
-  
- 
-    }
-
- 
-    console.log("fileString:",fileString)
-
+    // 2. เตรียม Payload
     const payload = {
       round_id: selectedRoundId.value,
       criteria_id: cId,
-      score: formModels[cId].score,
+      score: formModels[cId].score || 0,
       comment: formModels[cId].comment,
       evidence_url: formModels[cId].evidence_url,
-      evidence_file: fileString
+      evidence_file: fileString // ส่ง undefined ไปถ้าไม่เปลี่ยนไฟล์
     };
 
+    // 3. ส่ง API
     await api.post('/user/evaluate', payload);
 
-    // อัปเดตสถานะหน้าจอทันที
+    // 4. อัปเดตสถานะหน้าจอ
     criteria.isSubmitted = true;
-    formModels[cId].evidence_file = filePath; 
-    // fileInputs[cId] = null; // ล้าง Input
     
-    snackbar.message = 'บันทึกข้อมูลสำเร็จ';
-    snackbar.color = 'success';
-    snackbar.show = true;
+    // ถ้ามีการอัปโหลดไฟล์ใหม่ ให้แสดงผลทันที (เป็น Base64 ชั่วคราว จนกว่าจะรีเฟรชหน้า)
+    if (fileString) {
+        formModels[cId].evidence_file = fileString;
+        fileInputs[cId] = []; // ล้างช่อง input
+    }
+    
+    showSnackbar('บันทึกข้อมูลสำเร็จ', 'success');
 
   } catch (error) {
-    console.error(error);
-    snackbar.message = error.response?.data?.message || 'เกิดข้อผิดพลาดในการบันทึก';
-    snackbar.color = 'error';
-    snackbar.show = true;
+    console.error("Submit Error:", error);
+    showSnackbar(error.response?.data?.message || 'เกิดข้อผิดพลาดในการบันทึก', 'error');
   } finally {
     loadingIds[cId] = false;
   }
+};
+
+const showSnackbar = (msg, color) => {
+  snackbar.message = msg;
+  snackbar.color = color;
+  snackbar.show = true;
 };
 </script>

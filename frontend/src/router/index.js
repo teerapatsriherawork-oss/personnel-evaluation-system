@@ -14,12 +14,14 @@ const ManageUsers = () => import('../pages/admin/ManageUsers.vue');
 const CommitteeSummary = () => import('../pages/admin/CommitteeSummary.vue');
 const CommitteeTracking = () => import('../pages/admin/CommitteeTracking.vue');
 const EvaluateeTracking = () => import('../pages/admin/EvaluateeTracking.vue');
+// [เพิ่มบรรทัดนี้] Import หน้าดูรายงาน
+const IndividualReport = () => import('../pages/admin/IndividualReport.vue'); 
 
 // User Pages
 const SelfAssessment = () => import('../pages/user/SelfAssessment.vue');
 const MyReport = () => import('../pages/user/MyReport.vue');
 const Profile = () => import('../pages/user/Profile.vue');
-const UserProgress = () => import('../pages/user/UserProgress.vue'); // [เพิ่มส่วนนี้]
+const UserProgress = () => import('../pages/user/UserProgress.vue');
 
 // Committee Pages
 const EvaluationList = () => import('../pages/committee/EvaluationList.vue');
@@ -42,11 +44,14 @@ const routes = [
       { path: 'admin/committee-summary', component: CommitteeSummary, meta: { roles: ['admin'] } },
       { path: 'admin/committee-tracking', component: CommitteeTracking, meta: { roles: ['admin'] } },
       { path: 'admin/evaluatee-tracking', component: EvaluateeTracking, meta: { roles: ['admin'] } },
+      
+      // [เพิ่มส่วนนี้] Route สำหรับหน้าดูรายงาน
+      { path: 'admin/report/:roundId/:userId', component: IndividualReport, meta: { roles: ['admin'] } },
 
       // User Routes
       { path: 'self-assessment', component: SelfAssessment, meta: { roles: ['user'] } },
       { path: 'my-report', component: MyReport, meta: { roles: ['user'] } },
-      { path: 'progress', component: UserProgress, meta: { roles: ['user'] } }, // [เพิ่มส่วนนี้]
+      { path: 'progress', component: UserProgress, meta: { roles: ['user'] } },
       
       // Profile Route
       { path: 'profile', component: Profile, meta: { roles: ['admin', 'user', 'committee'] } },
@@ -58,10 +63,10 @@ const routes = [
       {
         path: '',
         redirect: () => {
-          const { user } = useAuthStore();
-          if (user?.role === 'admin') return '/dashboard';
-          if (user?.role === 'user') return '/self-assessment';
-          if (user?.role === 'committee') return '/evaluation-list';
+          const authStore = useAuthStore();
+          if (authStore.user?.role === 'admin') return '/dashboard';
+          if (authStore.user?.role === 'user') return '/self-assessment';
+          if (authStore.user?.role === 'committee') return '/evaluation-list';
           return '/login';
         }
       }

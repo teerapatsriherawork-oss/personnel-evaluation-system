@@ -5,14 +5,18 @@ const fs = require('fs');
 const path = require('path');
 const bcrypt = require('bcryptjs');
 
-// Helper: แปลง Base64 เป็นไฟล์ลง Disk
+// [FIXED] Helper: แปลง Base64 เป็นไฟล์ลง Disk (แก้ Regex แล้ว)
 const saveBase64ToFile = (base64String) => {
-    if (!base64String || !base64String.startsWith('data:')) return base64String;
+    if (!base64String || typeof base64String !== 'string' || !base64String.startsWith('data:')) {
+        return base64String;
+    }
 
     try {
-        const matches = base64String.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+        // [FIXED Regex]
+        const matches = base64String.match(/^data:([A-Za-z0-9+\/-]+);base64,(.+)$/);
         if (!matches || matches.length !== 3) {
-            return base64String;
+            console.error("[Base64] Invalid format pattern");
+            return null;
         }
 
         const type = matches[1];
@@ -30,16 +34,19 @@ const saveBase64ToFile = (base64String) => {
             fs.mkdirSync(uploadDir, { recursive: true });
         }
 
-        fs.writeFileSync(path.join(uploadDir, filename), data);
+        const filepath = path.join(uploadDir, filename);
+        fs.writeFileSync(filepath, data);
+        
+        console.log(`[User] Saved file: ${filename}`);
         return `/uploads/${filename}`;
 
     } catch (error) {
         console.error("[Base64] Error saving file:", error);
-        return null;
+        throw error;
     }
 };
 
-// [NEW] ดึงข้อมูลส่วนตัว (Profile)
+// [RESTORED] ดึงข้อมูลส่วนตัว (Profile)
 exports.getProfile = async (req, res) => {
     try {
         const userId = req.user.id;
@@ -55,13 +62,13 @@ exports.getProfile = async (req, res) => {
     }
 };
 
-// [NEW] อัปเดตข้อมูลส่วนตัว
+// [UPDATED] อัปเดตข้อมูลส่วนตัว (ใช้ saveBase64ToFile แบบใหม่)
 exports.updateProfile = async (req, res) => {
     try {
         const userId = req.user.id;
         let { fullname, email, phone, position, department, signature_file, password } = req.body;
 
-        // จัดการรูปภาพลายเซ็น (ถ้าส่งมาเป็น Base64)
+        // จัดการรูปภาพลายเซ็น
         if (signature_file && signature_file.startsWith('data:')) {
             signature_file = saveBase64ToFile(signature_file);
         }
@@ -69,7 +76,7 @@ exports.updateProfile = async (req, res) => {
         let sql = 'UPDATE users SET fullname=?, email=?, phone=?, position=?, department=?';
         let params = [fullname, email, phone, position, department];
 
-        // ถ้ามีการเปลี่ยนลายเซ็น
+        // ถ้ามีการเปลี่ยนลายเซ็น (signature_file มีค่าและไม่ใช่ null)
         if (signature_file) {
             sql += ', signature_path=?';
             params.push(signature_file);
@@ -95,7 +102,7 @@ exports.updateProfile = async (req, res) => {
     }
 };
 
-// Submit Self-Assessment
+// [RESTORED] Submit Self-Assessment
 exports.submitSelfAssessment = async (req, res) => {
     try {
         const userId = req.user.id;
@@ -114,7 +121,7 @@ exports.submitSelfAssessment = async (req, res) => {
             let sql = 'UPDATE evaluations SET score=?, evidence_url=?, comment=?';
             let params = [score, evidence_url, comment];
 
-            if (evidence_file !== undefined) {
+            if (evidence_file !== undefined && evidence_file !== null) {
                 sql += ', evidence_file=?';
                 params.push(evidence_file);
             }
@@ -137,7 +144,7 @@ exports.submitSelfAssessment = async (req, res) => {
     }
 };
 
-// Get My Evaluations
+// [RESTORED] Get My Evaluations
 exports.getMyEvaluations = async (req, res) => {
     try {
         const userId = req.user.id;
@@ -153,7 +160,7 @@ exports.getMyEvaluations = async (req, res) => {
     }
 };
 
-// Public Progress
+// [RESTORED] Public Progress
 exports.getPublicProgress = async (req, res) => {
     try {
         const [rounds] = await db.execute("SELECT id, round_name FROM rounds WHERE status = 'open' LIMIT 1");

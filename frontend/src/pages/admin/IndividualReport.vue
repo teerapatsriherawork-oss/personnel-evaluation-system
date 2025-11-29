@@ -64,13 +64,13 @@
               <div class="text-caption text-grey-darken-1">{{ item.indicator_name }}</div>
             </td>
             <td class="text-center align-top">
-              <v-chip v-if="item.self_score" size="small" color="blue-lighten-4" class="text-blue-darken-4 font-weight-bold">
+              <v-chip v-if="item.self_score > 0" size="small" color="blue-lighten-4" class="text-blue-darken-4 font-weight-bold">
                 {{ item.self_score }}
               </v-chip>
               <span v-else class="text-grey">-</span>
             </td>
             <td class="text-center align-top">
-              <div v-if="item.committee_score > 0" class="font-weight-bold text-success">
+              <div v-if="parseFloat(item.committee_score) > 0" class="font-weight-bold text-success">
                 {{ item.committee_score }}
               </div>
               <span v-else class="text-grey">-</span>
@@ -81,6 +81,9 @@
               </div>
               <div v-else class="text-caption text-grey">-</div>
             </td>
+          </tr>
+          <tr v-if="reportData.length === 0">
+            <td colspan="4" class="text-center text-grey py-4">ไม่พบข้อมูลการประเมิน</td>
           </tr>
         </tbody>
       </v-table>
@@ -113,9 +116,14 @@ const reportData = ref([]);
 const userData = ref({});
 const roundData = ref({});
 
-// Computed Properties
-const totalSelfScore = computed(() => reportData.value.reduce((sum, item) => sum + Number(item.self_score || 0), 0));
-const totalCommitteeScore = computed(() => reportData.value.reduce((sum, item) => sum + parseFloat(item.committee_score || 0), 0));
+// Computed Properties สำหรับคำนวณผลรวม
+const totalSelfScore = computed(() => {
+  return reportData.value.reduce((sum, item) => sum + Number(item.self_score || 0), 0);
+});
+
+const totalCommitteeScore = computed(() => {
+  return reportData.value.reduce((sum, item) => sum + parseFloat(item.committee_score || 0), 0);
+});
 
 const resultStatus = computed(() => {
   const score = totalCommitteeScore.value;
@@ -131,48 +139,17 @@ onMounted(async () => {
 const fetchData = async () => {
   try {
     loading.value = true;
-    // 1. ดึงโครงสร้างเกณฑ์ (Criteria)
-    const criRes = await api.get(`/admin/rounds/${roundId}/criterias`);
-    const criterias = criRes.data.data;
-
-    // 2. ดึงข้อมูลผลการประเมินของ User คนนั้น (Admin API)
-    const evalRes = await api.get(`/admin/report/${roundId}/${userId}`);
-    const allEvaluations = evalRes.data.data.evaluations;
-    userData.value = evalRes.data.data.user;
-    roundData.value = evalRes.data.data.round;
-
-    // 3. จับคู่ข้อมูล
-    reportData.value = criterias.map(c => {
-      // หาคะแนนที่ User ประเมินตนเอง (evaluator_id == evaluatee_id)
-      const myEval = allEvaluations.find(e => e.criteria_id === c.id && e.evaluator_id == userId);
-      
-      // หาคะแนนที่กรรมการประเมิน (evaluator_id != evaluatee_id)
-      const committeeEvals = allEvaluations.filter(e => e.criteria_id === c.id && e.evaluator_id != userId);
-
-      let committeeAvg = 0;
-      let comment = '';
-
-      if (committeeEvals.length > 0) {
-        const total = committeeEvals.reduce((sum, e) => sum + Number(e.score), 0);
-        committeeAvg = (total / committeeEvals.length).toFixed(2);
-        
-        // เลือกคอมเมนต์ล่าสุดมาแสดง
-        const lastComment = committeeEvals.find(e => e.comment);
-        if (lastComment) comment = lastComment.comment;
-      }
-
-      return {
-        id: c.id,
-        topic_name: c.topic_name,
-        indicator_name: c.indicator_name,
-        self_score: myEval ? myEval.score : 0,
-        committee_score: committeeAvg,
-        committee_comment: comment
-      };
-    });
+    
+    // เรียก API Admin Report ที่เตรียมข้อมูลไว้ให้แล้ว (จาก Backend ใหม่)
+    const res = await api.get(`/admin/report/${roundId}/${userId}`);
+    
+    // รับข้อมูลเข้าตัวแปรโดยตรง ไม่ต้อง map หรือ find เองแล้ว
+    reportData.value = res.data.data.report;
+    userData.value = res.data.data.user;
+    roundData.value = res.data.data.round;
 
   } catch (error) {
-    console.error(error);
+    console.error("Error fetching report:", error);
   } finally {
     loading.value = false;
   }
@@ -190,9 +167,22 @@ const printReport = () => {
 .report-table th, .report-table td {
   border-bottom: 1px solid #e0e0e0;
 }
+
 @media print {
-  body { -webkit-print-color-adjust: exact; }
-  .v-container { max-width: 100%; padding: 0; }
-  .d-print-none { display: none !important; }
+  body { 
+    -webkit-print-color-adjust: exact; 
+  }
+  .v-container { 
+    max-width: 100%; 
+    padding: 0; 
+    margin: 0;
+  }
+  .d-print-none { 
+    display: none !important; 
+  }
+  /* ซ่อน Elements อื่นๆ ของ App หลัก */
+  .v-navigation-drawer, .v-app-bar, .v-footer {
+    display: none !important;
+  }
 }
 </style>
