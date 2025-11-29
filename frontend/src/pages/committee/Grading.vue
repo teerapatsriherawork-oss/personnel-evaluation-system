@@ -188,12 +188,21 @@ const evaluateeId = ref(route.params.evaluateeId);
 
 const criterias = ref([]);
 const formModels = reactive({});
-const overallComment = ref(''); // [NEW] ตัวแปรเก็บความคิดเห็นสรุป
+const overallComment = ref('');
 const signatureFile = ref([]); 
 const existingSignature = ref(null);
 const loading = ref(true);
 const submitLoading = ref(false);
 const snackbar = reactive({ show: false, message: '', color: 'success' });
+
+// ---------------------------------------------------------
+// [FIXED] ย้าย showSnackbar ขึ้นมาประกาศก่อนที่จะถูกเรียกใช้งาน
+// ---------------------------------------------------------
+const showSnackbar = (msg, color) => {
+  snackbar.message = msg;
+  snackbar.color = color;
+  snackbar.show = true;
+};
 
 const getFileUrl = (path) => {
   if (!path) return '';
@@ -228,7 +237,7 @@ const fetchData = async () => {
   try {
     const res = await api.get(`/committee/grading/${roundId.value}/${evaluateeId.value}`);
     criterias.value = res.data.data;
-    overallComment.value = res.data.overall_comment || ''; // [NEW] โหลดความคิดเห็นสรุปเดิม
+    overallComment.value = res.data.overall_comment || '';
     
     if (criterias.value.length > 0) {
       const firstItem = criterias.value[0];
@@ -284,7 +293,6 @@ const handleSubmitGrading = async () => {
       return api.post('/committee/grade', payload);
     });
 
-    // [NEW] เพิ่ม Request สำหรับบันทึกความคิดเห็นสรุป
     promises.push(api.post('/committee/overall-comment', {
         round_id: roundId.value,
         evaluatee_id: evaluateeId.value,
@@ -305,11 +313,5 @@ const handleSubmitGrading = async () => {
   } finally {
     submitLoading.value = false;
   }
-};
-
-const showSnackbar = (msg, color) => {
-  snackbar.message = msg;
-  snackbar.color = color;
-  snackbar.show = true;
 };
 </script>
