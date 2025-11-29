@@ -9,68 +9,69 @@ const adminController = require('../controllers/adminController');
 const userController = require('../controllers/userController');
 const committeeController = require('../controllers/committeeController');
 const uploadController = require('../controllers/uploadController');
-const authMiddleware = require('../middleware/authMiddleware');
 
-console.log("Checking Controllers...");
-if (!adminController.createRound) console.error("❌ Error: adminController.createRound is missing!");
-if (!userController.getMyEvaluations) console.error("❌ Error: userController.getMyEvaluations is missing! Check userController.js");
-if (!authMiddleware) console.error("❌ Error: authMiddleware is missing!");
-console.log("Controllers Check Done.");
+// Import Middlewares
+const authMiddleware = require('../middleware/authMiddleware');
+const { verifyAdmin, verifyCommittee } = require('../middleware/roleMiddleware'); // [NEW] Role Check
+const { registerRules, loginRules, createRoundRules } = require('../middleware/validationMiddleware'); // [NEW] Validation
 
 // --- Public Routes ---
-router.post('/auth/register', authController.register);
-router.post('/auth/login', authController.login);
+router.post('/auth/register', registerRules, authController.register); // ใช้ Validation
+router.post('/auth/login', loginRules, authController.login);          // ใช้ Validation
 router.get('/public/progress', userController.getPublicProgress);
 
-// --- Protected Routes ---
+// --- Protected Routes (ต้อง Login) ---
 router.post('/upload', authMiddleware, uploadController.uploadMiddleware, uploadController.uploadFile);
 
-// 1. Admin Routes
-router.post('/admin/rounds', authMiddleware, adminController.createRound);
-router.get('/admin/rounds', authMiddleware, adminController.getAllRounds);
-router.put('/admin/rounds/:id/status', authMiddleware, adminController.updateRoundStatus);
-router.put('/admin/rounds/:id', authMiddleware, adminController.updateRound);
-router.delete('/admin/rounds/:id', authMiddleware, adminController.deleteRound);
+// ==========================================
+// 1. Admin Routes (ต้องเป็น Admin เท่านั้น)
+// ==========================================
+router.post('/admin/rounds', authMiddleware, verifyAdmin, createRoundRules, adminController.createRound); // ใช้ Validation + Role Check
+router.get('/admin/rounds', authMiddleware, verifyAdmin, adminController.getAllRounds);
+router.put('/admin/rounds/:id/status', authMiddleware, verifyAdmin, adminController.updateRoundStatus);
+router.put('/admin/rounds/:id', authMiddleware, verifyAdmin, adminController.updateRound);
+router.delete('/admin/rounds/:id', authMiddleware, verifyAdmin, adminController.deleteRound);
 
-router.post('/admin/topics', authMiddleware, adminController.createTopic);
-router.get('/admin/rounds/:roundId/topics', authMiddleware, adminController.getTopicsByRound);
-router.put('/admin/topics/:id', authMiddleware, adminController.updateTopic);
-router.delete('/admin/topics/:id', authMiddleware, adminController.deleteTopic);
+router.post('/admin/topics', authMiddleware, verifyAdmin, adminController.createTopic);
+router.get('/admin/rounds/:roundId/topics', authMiddleware, verifyAdmin, adminController.getTopicsByRound);
+router.put('/admin/topics/:id', authMiddleware, verifyAdmin, adminController.updateTopic);
+router.delete('/admin/topics/:id', authMiddleware, verifyAdmin, adminController.deleteTopic);
 
-router.post('/admin/criterias', authMiddleware, adminController.createCriteria);
-router.get('/admin/rounds/:roundId/criterias', authMiddleware, adminController.getCriteriasByRound);
-router.put('/admin/criterias/:id', authMiddleware, adminController.updateCriteria);
-router.delete('/admin/criterias/:id', authMiddleware, adminController.deleteCriteria);
+router.post('/admin/criterias', authMiddleware, verifyAdmin, adminController.createCriteria);
+router.get('/admin/rounds/:roundId/criterias', authMiddleware, verifyAdmin, adminController.getCriteriasByRound);
+router.put('/admin/criterias/:id', authMiddleware, verifyAdmin, adminController.updateCriteria);
+router.delete('/admin/criterias/:id', authMiddleware, verifyAdmin, adminController.deleteCriteria);
 
-router.get('/admin/users', authMiddleware, adminController.getAllUsers);
-router.post('/admin/users', authMiddleware, adminController.createUser);
-router.put('/admin/users/:id', authMiddleware, adminController.updateUser);
-router.delete('/admin/users/:id', authMiddleware, adminController.deleteUser);
+router.get('/admin/users', authMiddleware, verifyAdmin, adminController.getAllUsers);
+router.post('/admin/users', authMiddleware, verifyAdmin, registerRules, adminController.createUser); // ใช้กฎเดียวกับ Register
+router.put('/admin/users/:id', authMiddleware, verifyAdmin, adminController.updateUser);
+router.delete('/admin/users/:id', authMiddleware, verifyAdmin, adminController.deleteUser);
 
-router.get('/admin/mappings', authMiddleware, adminController.getAllMappings);
-router.post('/admin/mapping', authMiddleware, adminController.assignCommittee);
-router.put('/admin/mapping/:id', authMiddleware, adminController.updateMapping); 
-router.delete('/admin/mapping/:id', authMiddleware, adminController.deleteMapping); 
+router.get('/admin/mappings', authMiddleware, verifyAdmin, adminController.getAllMappings);
+router.post('/admin/mapping', authMiddleware, verifyAdmin, adminController.assignCommittee);
+router.put('/admin/mapping/:id', authMiddleware, verifyAdmin, adminController.updateMapping); 
+router.delete('/admin/mapping/:id', authMiddleware, verifyAdmin, adminController.deleteMapping); 
 
-router.get('/admin/stats', authMiddleware, adminController.getDashboardStats);
-router.get('/admin/summary/:roundId', authMiddleware, adminController.getCommitteeSummary);
-router.get('/admin/committee-progress/:roundId', authMiddleware, adminController.getCommitteeProgress);
-router.get('/admin/evaluatee-tracking/:roundId', authMiddleware, adminController.getEvaluateeTracking);
-router.get('/admin/report/:roundId/:userId', authMiddleware, adminController.getUserEvaluations);
+router.get('/admin/stats', authMiddleware, verifyAdmin, adminController.getDashboardStats);
+router.get('/admin/summary/:roundId', authMiddleware, verifyAdmin, adminController.getCommitteeSummary);
+router.get('/admin/committee-progress/:roundId', authMiddleware, verifyAdmin, adminController.getCommitteeProgress);
+router.get('/admin/evaluatee-tracking/:roundId', authMiddleware, verifyAdmin, adminController.getEvaluateeTracking);
+router.get('/admin/report/:roundId/:userId', authMiddleware, verifyAdmin, adminController.getUserEvaluations);
 
-// 2. User & Committee Routes
+// ==========================================
+// 2. User Routes (สำหรับผู้ใช้งานทั่วไป)
+// ==========================================
 router.post('/user/evaluate', authMiddleware, userController.submitSelfAssessment);
 router.get('/user/evaluations/:roundId', authMiddleware, userController.getMyEvaluations);
-
-// Profile Routes
 router.get('/user/profile', authMiddleware, userController.getProfile);
 router.put('/user/profile', authMiddleware, userController.updateProfile);
 
-// Committee Routes
-router.get('/committee/rounds/:roundId/evaluatees', authMiddleware, committeeController.getEvaluatees);
-router.get('/committee/grading/:roundId/:evaluateeId', authMiddleware, committeeController.getGradingInfo);
-router.post('/committee/grade', authMiddleware, committeeController.submitGrading);
-// [NEW] Route สำหรับบันทึกความคิดเห็นสรุป
-router.post('/committee/overall-comment', authMiddleware, committeeController.submitOverallComment);
+// ==========================================
+// 3. Committee Routes (สำหรับกรรมการ)
+// ==========================================
+router.get('/committee/rounds/:roundId/evaluatees', authMiddleware, verifyCommittee, committeeController.getEvaluatees);
+router.get('/committee/grading/:roundId/:evaluateeId', authMiddleware, verifyCommittee, committeeController.getGradingInfo);
+router.post('/committee/grade', authMiddleware, verifyCommittee, committeeController.submitGrading);
+router.post('/committee/overall-comment', authMiddleware, verifyCommittee, committeeController.submitOverallComment);
 
 module.exports = router;
