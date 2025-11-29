@@ -32,17 +32,23 @@
       <v-card class="mb-6 border" variant="outlined">
         <v-card-text class="text-center">
           <v-row>
-            <v-col cols="4">
-              <div class="text-caption">คะแนนรวม (ตนเอง)</div>
-              <div class="text-h4 text-primary">{{ totalSelfScore }}</div>
+            <v-col cols="3">
+              <div class="text-caption">คะแนนเต็ม</div>
+              <div class="text-h5 text-grey-darken-2">{{ totalMaxScore }}</div>
             </v-col>
-            <v-col cols="4">
-              <div class="text-caption">คะแนนรวม (กรรมการเฉลี่ย)</div>
-              <div class="text-h4 text-success">{{ totalCommitteeScore.toFixed(2) }}</div>
+            <v-col cols="3">
+              <div class="text-caption">คะแนนที่ได้ (กรรมการ)</div>
+              <div class="text-h4 text-primary">{{ totalCommitteeScore.toFixed(2) }}</div>
             </v-col>
-            <v-col cols="4">
-              <div class="text-caption">ผลประเมิน</div>
-              <div class="text-h6 mt-2">{{ resultStatus }}</div>
+            <v-col cols="3">
+              <div class="text-caption">คิดเป็นร้อยละ</div>
+              <div class="text-h4 text-info">{{ scorePercentage }}%</div>
+            </v-col>
+            <v-col cols="3">
+              <div class="text-caption">ผลการประเมิน</div>
+              <div class="text-h6 mt-2 font-weight-bold" :class="getStatusColor(resultStatus)">
+                {{ resultStatus }}
+              </div>
             </v-col>
           </v-row>
         </v-card-text>
@@ -52,9 +58,10 @@
         <thead>
           <tr class="bg-grey-lighten-3">
             <th class="text-left" width="40%">หัวข้อการประเมิน / ตัวชี้วัด</th>
+            <th class="text-center" width="10%">เต็ม</th>
             <th class="text-center" width="15%">ตนเอง</th>
             <th class="text-center" width="15%">กรรมการ (เฉลี่ย)</th>
-            <th class="text-left">หมายเหตุ / ความเห็นกรรมการ</th>
+            <th class="text-left">ความเห็นกรรมการ</th>
           </tr>
         </thead>
         <tbody>
@@ -62,6 +69,9 @@
             <td class="py-3 align-top">
               <div class="font-weight-bold">{{ item.topic_name }}</div>
               <div class="text-caption text-grey-darken-1">{{ item.indicator_name }}</div>
+            </td>
+            <td class="text-center align-top text-grey-darken-1">
+              {{ item.max_score }}
             </td>
             <td class="text-center align-top">
               <v-chip v-if="item.self_score > 0" size="small" color="blue-lighten-4" class="text-blue-darken-4 font-weight-bold">
@@ -81,9 +91,6 @@
               </div>
               <div v-else class="text-caption text-grey">-</div>
             </td>
-          </tr>
-          <tr v-if="reportData.length === 0">
-            <td colspan="4" class="text-center text-grey py-4">ไม่พบข้อมูลการประเมิน</td>
           </tr>
         </tbody>
       </v-table>
@@ -116,20 +123,32 @@ const reportData = ref([]);
 const userData = ref({});
 const roundData = ref({});
 
-// Computed Properties สำหรับคำนวณผลรวม
-const totalSelfScore = computed(() => {
-  return reportData.value.reduce((sum, item) => sum + Number(item.self_score || 0), 0);
+// คำนวณคะแนนเต็มรวมทั้งหมด
+const totalMaxScore = computed(() => {
+  return reportData.value.reduce((sum, item) => sum + Number(item.max_score || 0), 0);
 });
 
+// คำนวณคะแนนรวมที่ได้ (กรรมการ)
 const totalCommitteeScore = computed(() => {
   return reportData.value.reduce((sum, item) => sum + parseFloat(item.committee_score || 0), 0);
 });
 
+// คำนวณเปอร์เซ็นต์ (%)
+const scorePercentage = computed(() => {
+  if (totalMaxScore.value === 0) return 0;
+  return ((totalCommitteeScore.value / totalMaxScore.value) * 100).toFixed(2);
+});
+
+// ตัดเกรดจาก % (สมจริงกว่า)
 const resultStatus = computed(() => {
-  const score = totalCommitteeScore.value;
-  if (score > 80) return 'ดีเยี่ยม';
-  if (score > 50) return 'ผ่านเกณฑ์';
+  const percent = parseFloat(scorePercentage.value);
+  if (percent >= 80) return 'ดีเยี่ยม';
+  if (percent >= 60) return 'ผ่านเกณฑ์'; // ปรับเกณฑ์ผ่านเป็น 60% (มาตรฐานทั่วไป)
   return 'ต้องปรับปรุง';
+});
+
+const totalSelfScore = computed(() => {
+  return reportData.value.reduce((sum, item) => sum + Number(item.self_score || 0), 0);
 });
 
 onMounted(async () => {
@@ -139,20 +158,21 @@ onMounted(async () => {
 const fetchData = async () => {
   try {
     loading.value = true;
-    
-    // เรียก API Admin Report ที่เตรียมข้อมูลไว้ให้แล้ว (จาก Backend ใหม่)
     const res = await api.get(`/admin/report/${roundId}/${userId}`);
-    
-    // รับข้อมูลเข้าตัวแปรโดยตรง ไม่ต้อง map หรือ find เองแล้ว
     reportData.value = res.data.data.report;
     userData.value = res.data.data.user;
     roundData.value = res.data.data.round;
-
   } catch (error) {
     console.error("Error fetching report:", error);
   } finally {
     loading.value = false;
   }
+};
+
+const getStatusColor = (status) => {
+  if (status === 'ดีเยี่ยม') return 'text-success';
+  if (status === 'ผ่านเกณฑ์') return 'text-primary';
+  return 'text-error';
 };
 
 const printReport = () => {
@@ -167,22 +187,9 @@ const printReport = () => {
 .report-table th, .report-table td {
   border-bottom: 1px solid #e0e0e0;
 }
-
 @media print {
-  body { 
-    -webkit-print-color-adjust: exact; 
-  }
-  .v-container { 
-    max-width: 100%; 
-    padding: 0; 
-    margin: 0;
-  }
-  .d-print-none { 
-    display: none !important; 
-  }
-  /* ซ่อน Elements อื่นๆ ของ App หลัก */
-  .v-navigation-drawer, .v-app-bar, .v-footer {
-    display: none !important;
-  }
+  body { -webkit-print-color-adjust: exact; }
+  .v-container { max-width: 100%; padding: 0; }
+  .d-print-none { display: none !important; }
 }
 </style>

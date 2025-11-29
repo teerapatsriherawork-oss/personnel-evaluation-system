@@ -414,47 +414,68 @@ exports.getEvaluateeTracking = async (req, res) => {
     }
 };
 
-// [UPDATED] ฟังก์ชันสำหรับดึงผลประเมินรายบุคคล (Admin View) - แก้ไข JOIN เป็น LEFT JOIN
+// [UPDATED] ฟังก์ชันสำหรับดึงผลประเมินรายบุคคล (Admin View)
+// - แก้ไขการคำนวณคะแนนเป็นแบบถ่วงน้ำหนัก (Weighted Score)
+// - สูตร: (คะแนนดิบ 1-4 / 4) * น้ำหนัก (max_score)
 exports.getUserEvaluations = async (req, res) => {
     try {
         const { roundId, userId } = req.params;
+        const rId = parseInt(roundId);
+        const uId = parseInt(userId);
+
+        console.log(`[Report Debug] Round: ${rId}, User: ${uId}`);
         
         // 1. ดึงข้อมูล User
-        const [users] = await db.execute('SELECT fullname, position, department FROM users WHERE id = ?', [userId]);
+        const [users] = await db.execute('SELECT fullname, position, department FROM users WHERE id = ?', [uId]);
         const user = users[0] || { fullname: 'Unknown User' };
 
         // 2. ดึงข้อมูล Round
-        const [rounds] = await db.execute('SELECT round_name FROM rounds WHERE id = ?', [roundId]);
+        const [rounds] = await db.execute('SELECT round_name FROM rounds WHERE id = ?', [rId]);
         const round = rounds[0] || { round_name: 'Unknown Round' };
 
-        // 3. ดึงเกณฑ์ (Criterias) [Fixed: ใช้ LEFT JOIN เพื่อป้องกันข้อมูลหาย]
+        // 3. ดึงเกณฑ์ (Criterias) ใช้ LEFT JOIN
         const [criterias] = await db.execute(
             `SELECT c.*, COALESCE(t.topic_name, 'ไม่ระบุหัวข้อ') as topic_name 
              FROM criterias c
              LEFT JOIN topics t ON c.topic_id = t.id
              WHERE c.round_id = ?`, 
-            [roundId]
+            [rId]
         );
+        console.log(`[Report Debug] Criterias found: ${criterias.length}`);
 
         // 4. ดึงคะแนนดิบ (Evaluations)
         const [evaluations] = await db.execute(
             'SELECT * FROM evaluations WHERE round_id = ? AND evaluatee_id = ?',
-            [roundId, userId]
+            [rId, uId]
         );
+        console.log(`[Report Debug] Evaluations found: ${evaluations.length}`);
 
-        // 5. ประมวลผลรวมคะแนน
+        // 5. ประมวลผลรวมคะแนน (Weighted Score Calculation)
         const reportData = criterias.map(c => {
-            const myEval = evaluations.find(e => e.criteria_id === c.id && e.evaluator_id == userId);
-            const committeeEvals = evaluations.filter(e => e.criteria_id === c.id && e.evaluator_id != userId);
+            const weight = Number(c.max_score || 0); // max_score = น้ำหนักคะแนน
+
+            // --- คำนวณคะแนนตนเอง ---
+            const myEval = evaluations.find(e => e.criteria_id == c.id && e.evaluator_id == uId);
+            const myRating = myEval ? Number(myEval.score) : 0; // คะแนนดิบ 1-4
             
-            let committeeScore = 0;
+            // สูตร: (Rating / 4) * Weight
+            // เช่น (3 / 4) * 20 = 15 คะแนน
+            const myWeightedScore = (myRating > 0 && weight > 0) ? (myRating / 4) * weight : 0;
+
+            // --- คำนวณคะแนนกรรมการ ---
+            const committeeEvals = evaluations.filter(e => e.criteria_id == c.id && e.evaluator_id != uId);
+            let committeeRating = 0;
+            let committeeWeightedScore = 0;
             let committeeComment = '';
 
             if (committeeEvals.length > 0) {
-                const totalScore = committeeEvals.reduce((sum, e) => sum + Number(e.score || 0), 0);
-                committeeScore = (totalScore / committeeEvals.length).toFixed(2);
+                // หาค่าเฉลี่ย Rating (1-4) ของกรรมการทุกคน
+                const totalRating = committeeEvals.reduce((sum, e) => sum + Number(e.score || 0), 0);
+                committeeRating = totalRating / committeeEvals.length; // เช่น (4+3)/2 = 3.5
+
+                // แปลงเป็นคะแนนตามน้ำหนัก
+                committeeWeightedScore = (committeeRating / 4) * weight;
                 
-                // เอาคอมเมนต์จากกรรมการคนแรกที่มีคอมเมนต์
                 const commentEval = committeeEvals.find(e => e.comment);
                 if (commentEval) committeeComment = commentEval.comment;
             }
@@ -463,13 +484,16 @@ exports.getUserEvaluations = async (req, res) => {
                 id: c.id,
                 topic_name: c.topic_name,
                 indicator_name: c.indicator_name,
-                self_score: myEval ? myEval.score : 0,
-                committee_score: committeeScore,
-                committee_comment: committeeComment
+                
+                // ส่งกลับเป็น "คะแนนสุทธิตามน้ำหนัก"
+                self_score: myWeightedScore.toFixed(2), 
+                committee_score: committeeWeightedScore.toFixed(2),
+                
+                committee_comment: committeeComment,
+                max_score: weight // คะแนนเต็ม (น้ำหนัก) ของข้อนี้
             };
         });
 
-        // ส่งข้อมูลกลับตามโครงสร้างที่ Frontend คาดหวัง
         res.status(200).json({ 
             status: 'success', 
             data: {
