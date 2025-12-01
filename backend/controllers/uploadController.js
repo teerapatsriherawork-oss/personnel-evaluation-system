@@ -4,10 +4,9 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 
-// [FIX 1] ใช้ path.join เพื่อระบุพิกัดโฟลเดอร์แบบ "ตายตัว"
 const UPLOAD_FOLDER = path.join(__dirname, '../uploads');
 
-// [FIX 2] สร้างโฟลเดอร์ถ้ายังไม่มี
+// Ensure upload folder exists
 if (!fs.existsSync(UPLOAD_FOLDER)) {
     try {
         fs.mkdirSync(UPLOAD_FOLDER, { recursive: true });
@@ -15,40 +14,36 @@ if (!fs.existsSync(UPLOAD_FOLDER)) {
     } catch (err) {
         console.error(`❌ Error creating upload folder: ${err.message}`);
     }
-} else {
-    console.log(`📂 Using upload folder at: ${UPLOAD_FOLDER}`);
 }
 
 // Config Storage
 const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, UPLOAD_FOLDER);
+    destination: (req, file, callback) => {
+        callback(null, UPLOAD_FOLDER);
     },
-    filename: (req, file, cb) => {
-        const ext = path.extname(file.originalname);
+    filename: (req, file, callback) => {
+        const extension = path.extname(file.originalname);
         const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, `file-${uniqueSuffix}${ext}`);
+        callback(null, `file-${uniqueSuffix}${extension}`);
     }
 });
 
-// [SECURITY REMOVED] อนุญาตไฟล์ทุกประเภท
-const NO_FILTER = (req, file, cb) => {
-    cb(null, true); 
+// File Filter: Allow all file types
+const allowAllFileTypes = (req, file, callback) => {
+    callback(null, true); 
 };
 
 // Initialize Multer
 const upload = multer({ 
     storage: storage,
-    // [SECURITY REMOVED] ลบ limits ออก
-    fileFilter: NO_FILTER // ใช้ฟังก์ชันที่อนุญาตทุกไฟล์
-}).single('file'); // รับไฟล์ชื่อ 'file' เท่านั้น
+    fileFilter: allowAllFileTypes
+}).single('file'); // Expects field name 'file'
 
-// [FIX 3] Wrapper Middleware ที่ถูกต้อง เพื่อดัก Multer Error
+// Wrapper Middleware to handle Multer errors gracefully
 exports.uploadMiddleware = (req, res, next) => {
     upload(req, res, (err) => {
         if (err) {
-            // หากเกิด Error (เช่น ไฟล์ใหญ่เกิน, ผิดประเภท)
-            console.error("❌ File Upload Intercepted by Multer Error:", err.message);
+            console.error("File Upload Error:", err.message);
             return res.status(400).json({ status: 'error', message: err.message });
         }
         next();
@@ -57,17 +52,9 @@ exports.uploadMiddleware = (req, res, next) => {
 
 exports.uploadFile = (req, res) => {
     if (!req.file) {
-        // [Diagnostic Log] ถ้าไม่เห็นไฟล์
-        console.error("❌❌ UPLOAD FAILED: Multer did not receive req.file. (Final Check)");
         return res.status(400).json({ status: 'error', message: 'กรุณาเลือกไฟล์ที่ถูกต้อง' });
     }
     
-    // [Diagnostic Log] ถ้าเห็นไฟล์
-    console.log(`[DEBUG] Multer received file size: ${req.file.size} bytes`); 
-    console.log(`✅ File Saved Successfully!`);
-    console.log(`   👉 Filename: ${req.file.filename}`);
-    console.log(`   👉 Full Path: ${req.file.path}`); 
-
     res.status(200).json({
         status: 'success',
         message: 'อัพโหลดสำเร็จ',
