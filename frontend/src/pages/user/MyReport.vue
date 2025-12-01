@@ -213,6 +213,7 @@ const printReport = () => {
   /* Force background colors */
   body {
     -webkit-print-color-adjust: exact;
+    print-color-adjust: exact; /* Added standard property for compatibility */
   }
   
   /* Setup Page */

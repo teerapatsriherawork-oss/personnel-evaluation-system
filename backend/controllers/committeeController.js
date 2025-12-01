@@ -4,7 +4,7 @@ const db = require('../config/database');
 const fs = require('fs');
 const path = require('path');
 
-// [FIXED] แก้ไข Regex ให้ถูกต้อง และเพิ่ม Log
+// Helper: แปลง Base64 เป็นไฟล์ลง Disk
 const saveBase64ToFile = (base64String) => {
     // ถ้าไม่มีข้อมูล หรือไม่ใช่ base64 (อาจเป็น path เดิม) ให้คืนค่าเดิม
     if (!base64String || typeof base64String !== 'string' || !base64String.startsWith('data:')) {
@@ -12,7 +12,7 @@ const saveBase64ToFile = (base64String) => {
     }
 
     try {
-        // [FIXED] Regex ที่ถูกต้อง: ย้ายเครื่องหมาย - ไปไว้ท้ายสุดของ Group
+        // Regex ที่ถูกต้องสำหรับดึงข้อมูล Base64
         const matches = base64String.match(/^data:([A-Za-z0-9+\/-]+);base64,(.+)$/);
         
         if (!matches || matches.length !== 3) {
@@ -47,7 +47,7 @@ const saveBase64ToFile = (base64String) => {
     }
 };
 
-// 1. ดึงรายชื่อผู้ที่กรรมการคนนี้ต้องประเมิน [RESTORED]
+// 1. ดึงรายชื่อผู้ที่กรรมการคนนี้ต้องประเมิน
 exports.getEvaluatees = async (req, res) => {
     try {
         const evaluatorId = req.user.id;
@@ -97,7 +97,7 @@ exports.getEvaluatees = async (req, res) => {
     }
 };
 
-// 2. ดึงข้อมูลสำหรับหน้าให้คะแนน [RESTORED]
+// 2. ดึงข้อมูลสำหรับหน้าให้คะแนน
 exports.getGradingInfo = async (req, res) => {
     try {
         const evaluatorId = req.user.id;
@@ -176,14 +176,16 @@ exports.getGradingInfo = async (req, res) => {
     }
 };
 
-// 3. บันทึกการให้คะแนนรายข้อ [UPDATED Fix Base64 Logic]
+// 3. บันทึกการให้คะแนนรายข้อ
 exports.submitGrading = async (req, res) => {
     try {
         const evaluatorId = req.user.id;
-        let { round_id, criteria_id, evaluatee_id, score, comment, evidence_file } = req.body;
+        
+        // [FIXED] กำหนดค่า Default ให้ evidence_file เป็น null ถ้าไม่ได้ส่งมา (ป้องกัน undefined error)
+        let { round_id, criteria_id, evaluatee_id, score, comment, evidence_file = null } = req.body;
 
-        // แปลงไฟล์ถ้ามี
-        if (evidence_file && evidence_file.startsWith('data:')) {
+        // แปลงไฟล์ถ้ามี (ถ้า evidence_file เป็น base64 string)
+        if (evidence_file && typeof evidence_file === 'string' && evidence_file.startsWith('data:')) {
             const savedPath = saveBase64ToFile(evidence_file);
             if (savedPath) {
                 evidence_file = savedPath;
@@ -193,25 +195,30 @@ exports.submitGrading = async (req, res) => {
             }
         }
 
+        // ตรวจสอบว่าเคยประเมินข้อนี้หรือยัง
         const [existing] = await db.execute(
             'SELECT id FROM evaluations WHERE round_id=? AND criteria_id=? AND evaluatee_id=? AND evaluator_id=?',
             [round_id, criteria_id, evaluatee_id, evaluatorId]
         );
 
         if (existing.length > 0) {
+            // กรณีมีข้อมูลแล้ว -> อัปเดต (Update)
             let sql = 'UPDATE evaluations SET score=?, comment=?, updated_at=NOW()';
             let params = [score, comment];
             
             // อัปเดตไฟล์เฉพาะเมื่อมีการส่งไฟล์ใหม่มา (ไม่เป็น null)
-            if (evidence_file) {
+            if (evidence_file !== null) {
                 sql += ', evidence_file=?';
                 params.push(evidence_file);
             }
             
             sql += ' WHERE id=?';
             params.push(existing[0].id);
+            
             await db.execute(sql, params);
         } else {
+            // กรณีไม่มีข้อมูล -> เพิ่มใหม่ (Insert)
+            // ใช้ evidence_file ที่มีค่า Default เป็น null (ถ้าไม่ได้ส่งมา) ทำให้ไม่เกิด Error undefined
             await db.execute(
                 'INSERT INTO evaluations (round_id, criteria_id, evaluatee_id, evaluator_id, score, comment, evidence_file) VALUES (?, ?, ?, ?, ?, ?, ?)',
                 [round_id, criteria_id, evaluatee_id, evaluatorId, score, comment, evidence_file]
