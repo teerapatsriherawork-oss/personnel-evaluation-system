@@ -74,28 +74,6 @@
               </v-row>
 
               <v-divider class="my-4"></v-divider>
-              
-              <div class="text-subtitle-1 font-weight-bold mb-2 text-primary">
-                <v-icon start>mdi-draw</v-icon> ลายเซ็นดิจิทัล (Signature)
-              </div>
-              
-              <div v-if="currentSignature" class="mb-3 pa-3 bg-grey-lighten-4 rounded border d-flex align-center">
-                 <v-img :src="getFileUrl(currentSignature)" max-width="150" max-height="80" contain class="mr-4 bg-white"></v-img>
-                 <span class="text-caption text-grey">ลายเซ็นปัจจุบัน</span>
-              </div>
-
-              <v-file-input
-                v-model="signatureFile"
-                label="อัปโหลดลายเซ็นใหม่ (ถ้าต้องการเปลี่ยน)"
-                accept="image/*"
-                variant="outlined"
-                density="compact"
-                prepend-icon=""
-                prepend-inner-icon="mdi-camera"
-                show-size
-              ></v-file-input>
-
-              <v-divider class="my-4"></v-divider>
 
               <div class="text-subtitle-1 font-weight-bold mb-2 text-error">
                 <v-icon start>mdi-lock</v-icon> เปลี่ยนรหัสผ่าน (Optional)
@@ -147,17 +125,10 @@ const profile = reactive({
   position: '',
   department: ''
 });
-const currentSignature = ref('');
-const signatureFile = ref([]);
+
 const password = ref('');
 const loading = ref(false);
 const snackbar = reactive({ show: false, message: '', color: 'success' });
-
-const getFileUrl = (path) => {
-  if (!path) return '';
-  if (path.startsWith('http') || path.startsWith('data:')) return path;
-  return `http://localhost:5000${path}`;
-};
 
 onMounted(async () => {
   await fetchProfile();
@@ -168,19 +139,9 @@ const fetchProfile = async () => {
     const res = await api.get('/user/profile');
     const data = res.data.data;
     Object.assign(profile, data);
-    currentSignature.value = data.signature_path;
   } catch (error) {
     console.error(error);
   }
-};
-
-const fileToBase64 = (file) => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = error => reject(error);
-    reader.readAsDataURL(file);
-  });
 };
 
 const saveProfile = async () => {
@@ -194,11 +155,6 @@ const saveProfile = async () => {
   loading.value = true;
   try {
     const payload = { ...profile };
-    
-    // Handle Signature Upload
-    if (signatureFile.value && signatureFile.value.length > 0) {
-      payload.signature_file = await fileToBase64(signatureFile.value[0]);
-    }
 
     // Handle Password
     if (password.value) {
@@ -216,7 +172,7 @@ const saveProfile = async () => {
     snackbar.color = 'success';
     snackbar.show = true;
     password.value = ''; // Clear password field
-    signatureFile.value = []; // Clear file input
+    
     await fetchProfile(); // Refresh data
 
   } catch (error) {

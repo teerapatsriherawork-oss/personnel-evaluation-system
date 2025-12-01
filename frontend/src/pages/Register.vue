@@ -1,5 +1,3 @@
-<!-- [5.2.1] หน้าลงทะเบียน -->
-<!-- src/pages/Register.vue -->
 <template>
   <v-container fluid class="fill-height" style="background-color: #f0f4f8;">
     <v-row align="center" justify="center">
@@ -49,16 +47,6 @@
                 class="mb-3"
               ></v-text-field>
               
-              <v-select
-                v-model="formData.role"
-                :items="roleItems"
-                label="Role (บทบาท)"
-                prepend-icon="mdi-account-group"
-                variant="outlined"
-                required
-                class="mb-3"
-              ></v-select>
-
               <v-btn
                 :loading="loading"
                 :disabled="loading"
@@ -92,17 +80,12 @@ const formData = reactive({
   username: '',
   password: '',
   fullname: '',
-  role: 'user', // Default role
+  role: 'user', // [แก้ไข] กำหนดค่าเริ่มต้นเป็น 'user' เสมอ
 });
 
-const roleItems = [
-  { title: 'ผู้ใช้งาน (User)', value: 'user' },
-  { title: 'กรรมการ (Committee)', value: 'committee' },
-  { title: 'ผู้ดูแลระบบ (Admin)', value: 'admin' },
-];
-
 const handleRegister = async () => {
-  if (!formData.username || !formData.password || !formData.fullname || !formData.role) {
+  // ตรวจสอบข้อมูล (ไม่ต้องเช็ค role เพราะมีค่า default อยู่แล้ว)
+  if (!formData.username || !formData.password || !formData.fullname) {
     errorMessage.value = "กรุณากรอกข้อมูลให้ครบถ้วน";
     return;
   }
@@ -112,7 +95,7 @@ const handleRegister = async () => {
   
   try {
     await authStore.register(formData);
-    // authStore.register จะ redirect ไปหน้า login เอง
+    // authStore.register จะ redirect ไปหน้า login เองเมื่อสำเร็จ
   } catch (error) {
     errorMessage.value = error.response?.data?.message || "Registration failed. Please try again.";
   } finally {
