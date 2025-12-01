@@ -21,22 +21,24 @@
           variant="outlined"
           prepend-inner-icon="mdi-calendar"
           hide-details
-          @update:modelValue="fetchProgress"
+          @update:modelValue="fetchCommitteeProgress"
         ></v-select>
       </v-card-text>
     </v-card>
 
     <v-card class="elevation-4" v-if="selectedRoundId">
       <v-data-table
-        :headers="headers"
-        :items="progressData"
-        :loading="loading"
+        :headers="tableHeaders"
+        :items="committeeProgressList"
+        :loading="isLoading"
         class="elevation-1"
         hover
       >
         <template v-slot:[`item.committee_name`]="{ item }">
-          <div class="font-weight-bold text-subtitle-1">{{ item.committee_name }}</div>
-          <div class="text-caption text-grey">รหัสพนักงาน: {{ item.committee_id }}</div>
+          <div class="py-2">
+            <div class="font-weight-bold text-subtitle-1">{{ item.committee_name }}</div>
+            <div class="text-caption text-grey">รหัสพนักงาน: {{ item.committee_id }}</div>
+          </div>
         </template>
 
         <template v-slot:[`item.total_evaluatees`]="{ item }">
@@ -45,7 +47,7 @@
               <v-icon start size="small">mdi-account-multiple</v-icon>
               ดูแล {{ item.total_evaluatees }} คน
             </v-chip>
-            <div class="text-caption text-grey-darken-1" style="line-height: 1.2;">
+            <div class="text-caption text-grey-darken-1 text-truncate" style="max-width: 300px;">
               <v-icon size="x-small" class="mr-1">mdi-account-arrow-right</v-icon>
               {{ item.evaluatee_list }}
             </div>
@@ -53,7 +55,7 @@
         </template>
 
         <template v-slot:[`item.progress`]="{ item }">
-          <div class="d-flex flex-column py-2">
+          <div class="d-flex flex-column py-2" style="min-width: 200px;">
             <div class="d-flex align-center w-100">
                 <v-progress-linear
                   :model-value="item.progress"
@@ -70,7 +72,6 @@
             </div>
             <div class="text-caption text-right text-grey mt-1">
                ทำไปแล้ว <span class="text-primary font-weight-bold">{{ item.total_evaluations_done }}</span> / {{ item.total_tasks }} ข้อ 
-               (เกณฑ์ {{ item.total_criteria_per_person }} ข้อ/คน)
             </div>
           </div>
         </template>
@@ -108,13 +109,13 @@ import api from '../../plugins/axios';
 
 const rounds = ref([]);
 const selectedRoundId = ref(null);
-const progressData = ref([]);
-const loading = ref(false);
+const committeeProgressList = ref([]);
+const isLoading = ref(false);
 
-const headers = [
+const tableHeaders = [
   { title: 'กรรมการผู้ประเมิน', key: 'committee_name', align: 'start', width: '25%' },
-  { title: 'ภาระงาน (ผู้รับการประเมิน)', key: 'total_evaluatees', align: 'start', width: '30%' }, // ปรับความกว้างและ Align
-  { title: 'ความคืบหน้า (Progress)', key: 'progress', align: 'start', width: '30%' },
+  { title: 'ภาระงาน (ผู้รับการประเมิน)', key: 'total_evaluatees', align: 'start', width: '35%' },
+  { title: 'ความคืบหน้า (Progress)', key: 'progress', align: 'start', width: '25%' },
   { title: 'สถานะ', key: 'status', align: 'center', width: '15%' },
 ];
 
@@ -127,18 +128,18 @@ onMounted(async () => {
   }
 });
 
-const fetchProgress = async () => {
+const fetchCommitteeProgress = async () => {
   if (!selectedRoundId.value) return;
   
-  loading.value = true;
+  isLoading.value = true;
   try {
     const res = await api.get(`/admin/committee-progress/${selectedRoundId.value}`);
-    progressData.value = res.data.data;
+    committeeProgressList.value = res.data.data;
   } catch (error) {
     console.error('Error fetching progress:', error);
-    progressData.value = [];
+    committeeProgressList.value = [];
   } finally {
-    loading.value = false;
+    isLoading.value = false;
   }
 };
 

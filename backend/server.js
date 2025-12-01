@@ -10,54 +10,63 @@ const apiRoutes = require("./routes/apiRoutes");
 
 const app = express();
 
-// Middleware
+// ==========================================
+// 1. App Configuration & Middlewares
+// ==========================================
 app.use(cors());
+// เพิ่ม limit รองรับการส่งรูปภาพ Base64
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// Static Files (สำหรับรูปภาพและไฟล์แนบ)
+// ==========================================
+// 2. Static Files
+// ==========================================
+// ให้บริการไฟล์ที่อัปโหลด (Uploads)
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
-// API Routes
-// Log ทุก Request เพื่อช่วยในการ Debug (เกณฑ์ข้อ 3.2.7.7 การตรวจสอบ Console)
+// ==========================================
+// 3. API Routes
+// ==========================================
+// Logging middleware (Development only)
 app.use("/api", (req, res, next) => {
-    console.log(`[API Log] ${req.method} ${req.originalUrl}`);
+    if (process.env.NODE_ENV !== 'production') {
+        console.log(`[API] ${req.method} ${req.originalUrl}`);
+    }
     next();
 }, apiRoutes);
 
-// Test Endpoint
+// Health Check
 app.get("/", (req, res) => {
-    res.send("Personnel Evaluation System API is running...");
+    res.send({ status: 'ok', message: 'Personnel Evaluation System API is running...' });
 });
 
 // ==========================================
-// [FIXED] ส่วนจัดการ Error (Error Handling)
-// ตามเกณฑ์ข้อ 3.2.4.4 และ 3.2.6.5
+// 4. Error Handling
 // ==========================================
 
-// 1. Handle 404 Not Found (สำหรับ API ที่ไม่มีจริง)
+// 404 Not Found
 app.use((req, res, next) => {
     res.status(404).json({
         status: 'error',
-        message: `Route not found: ${req.originalUrl} (Error 404)`
+        message: `Route not found: ${req.originalUrl}`
     });
 });
 
-// 2. Global Error Handler (ดักจับ Error 500 หรืออื่นๆ)
+// Global Error Handler
 app.use((err, req, res, next) => {
-    console.error("🔥 Server Error Stack:", err.stack);
+    console.error("🔥 Server Error:", err.stack);
     
-    // กำหนด Status Code (ถ้าไม่มีให้เป็น 500)
     const statusCode = err.status || 500;
-    
     res.status(statusCode).json({
         status: 'error',
         message: err.message || 'Internal Server Error',
-        // ส่ง stack trace เฉพาะตอน dev เพื่อความปลอดภัย
-        error: process.env.NODE_ENV === 'development' ? err.stack : {}
+        error: process.env.NODE_ENV === 'development' ? err.stack : undefined
     });
 });
 
+// ==========================================
+// 5. Server Startup
+// ==========================================
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
     console.log(`✅ Backend server is running on port ${PORT}`);

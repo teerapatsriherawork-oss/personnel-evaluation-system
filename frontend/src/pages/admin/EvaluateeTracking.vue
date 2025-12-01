@@ -20,44 +20,65 @@
           variant="outlined"
           prepend-inner-icon="mdi-calendar"
           hide-details
-          @update:modelValue="fetchTracking"
+          @update:modelValue="fetchEvaluateeTracking"
         ></v-select>
       </v-card-text>
     </v-card>
 
     <v-card class="elevation-4" v-if="selectedRoundId">
       <v-data-table
-        :headers="headers"
-        :items="trackingData"
-        :loading="loading"
+        :headers="tableHeaders"
+        :items="evaluateeList"
+        :loading="isLoading"
         class="elevation-1"
         hover
       >
         <template v-slot:[`item.fullname`]="{ item }">
-          <div class="font-weight-bold">{{ item.fullname }}</div>
-          <div class="text-caption text-grey">ID: {{ item.id }}</div>
+          <div class="font-weight-bold text-subtitle-1">{{ item.fullname }}</div>
+          <div class="text-caption text-grey">User ID: {{ item.id }}</div>
         </template>
 
         <template v-slot:[`item.self_status`]="{ item }">
-          <v-chip :color="getSelfStatusColor(item.self_status)" size="small" label>
+          <v-chip 
+            :color="getSelfStatusColor(item.self_status)" 
+            size="small" 
+            label 
+            class="font-weight-bold"
+          >
+            <v-icon start size="x-small">
+                {{ item.self_status === 'Complete' ? 'mdi-check' : 'mdi-alert-circle-outline' }}
+            </v-icon>
             {{ item.self_status }}
           </v-chip>
           <div class="text-caption text-grey mt-1">
-            {{ item.self_done }} / {{ item.total_criteria }} ข้อ
+            ทำแล้ว {{ item.self_done }} / {{ item.total_criteria }} ข้อ
           </div>
         </template>
 
         <template v-slot:[`item.committee_progress`]="{ item }">
-          <v-progress-linear :model-value="item.committee_progress" :color="getProgressColor(item.committee_progress)" height="15" striped rounded>
-             <template v-slot:default="{ value }"><strong>{{ Math.ceil(value) }}%</strong></template>
-          </v-progress-linear>
-          <div class="text-caption text-grey mt-1">กรรมการ {{ item.committee_count }} คน</div>
+          <div style="min-width: 150px;">
+            <v-progress-linear 
+                :model-value="item.committee_progress" 
+                :color="getProgressColor(item.committee_progress)" 
+                height="15" 
+                striped 
+                rounded
+            >
+                <template v-slot:default="{ value }">
+                    <strong class="text-white text-caption">{{ Math.ceil(value) }}%</strong>
+                </template>
+            </v-progress-linear>
+            <div class="text-caption text-grey mt-1 d-flex justify-space-between">
+                <span>ประเมินโดย {{ item.committee_count }} ท่าน</span>
+                <span>{{ item.committee_eval_total }} คะแนน(ดิบ)</span>
+            </div>
+          </div>
         </template>
 
-        <template v-slot:[`item.overall`]="{ item }">
+        <template v-slot:[`item.actions`]="{ item }">
             <v-btn 
                 size="small" 
-                variant="outlined" 
+                variant="tonal" 
                 color="primary"
                 :to="`/admin/report/${selectedRoundId}/${item.id}`"
                 prepend-icon="mdi-file-document-outline"
@@ -67,6 +88,10 @@
         </template>
       </v-data-table>
     </v-card>
+    
+    <div v-else class="text-center py-10 text-grey-lighten-1">
+      กรุณาเลือกรอบการประเมินเพื่อเริ่มติดตาม
+    </div>
   </v-container>
 </template>
 
@@ -76,32 +101,47 @@ import api from '../../plugins/axios';
 
 const rounds = ref([]);
 const selectedRoundId = ref(null);
-const trackingData = ref([]);
-const loading = ref(false);
+const evaluateeList = ref([]);
+const isLoading = ref(false);
 
-const headers = [
-  { title: 'ผู้รับการประเมิน', key: 'fullname', width: '25%' },
-  { title: 'ประเมินตนเอง', key: 'self_status', align: 'center', width: '20%' },
-  { title: 'กรรมการ', key: 'committee_progress', width: '35%' },
-  { title: 'Action', key: 'overall', align: 'center', width: '20%' },
+const tableHeaders = [
+  { title: 'ผู้รับการประเมิน', key: 'fullname', align: 'start', width: '30%' },
+  { title: 'สถานะประเมินตนเอง', key: 'self_status', align: 'center', width: '25%' },
+  { title: 'ความคืบหน้ากรรมการ', key: 'committee_progress', align: 'start', width: '30%' },
+  { title: 'Action', key: 'actions', align: 'center', width: '15%' },
 ];
 
 onMounted(async () => {
-  const res = await api.get('/admin/rounds');
-  rounds.value = res.data.data;
+  try {
+    const res = await api.get('/admin/rounds');
+    rounds.value = res.data.data;
+  } catch (error) {
+    console.error('Fetch rounds error:', error);
+  }
 });
 
-const fetchTracking = async () => {
+const fetchEvaluateeTracking = async () => {
   if (!selectedRoundId.value) return;
-  loading.value = true;
+  isLoading.value = true;
   try {
     const res = await api.get(`/admin/evaluatee-tracking/${selectedRoundId.value}`);
-    trackingData.value = res.data.data;
+    evaluateeList.value = res.data.data;
+  } catch (error) {
+    console.error('Fetch tracking error:', error);
   } finally {
-    loading.value = false;
+    isLoading.value = false;
   }
 };
 
-const getSelfStatusColor = (status) => status === 'Complete' ? 'success' : (status === 'In Progress' ? 'warning' : 'error');
-const getProgressColor = (p) => p >= 100 ? 'success' : 'orange';
+const getSelfStatusColor = (status) => {
+    if (status === 'Complete') return 'success';
+    if (status === 'In Progress') return 'warning';
+    return 'error';
+};
+
+const getProgressColor = (p) => {
+    if (p >= 100) return 'success';
+    if (p >= 50) return 'info';
+    return 'orange';
+};
 </script>
