@@ -22,7 +22,7 @@
       </v-row>
     </v-alert>
 
-    <div v-if="isLoading" class="text-center py-5">
+    <div v-if="loading" class="text-center py-5">
       <v-progress-circular indeterminate color="primary" size="64"></v-progress-circular>
       <div class="mt-3">กำลังโหลดข้อมูล...</div>
     </div>
@@ -37,28 +37,28 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="criteria in criteriasList" :key="criteria.id">
+          <tr v-for="c in criterias" :key="c.id">
             <td class="py-3 align-top">
-              <div class="font-weight-bold text-subtitle-1">{{ criteria.topic_name }}</div>
-              <div class="text-body-2 mb-1">{{ criteria.indicator_name }}</div>
-              <div v-if="criteria.description" class="text-caption text-grey">
-                {{ criteria.description }}
+              <div class="font-weight-bold text-subtitle-1">{{ c.topic_name }}</div>
+              <div class="text-body-2 mb-1">{{ c.indicator_name }}</div>
+              <div v-if="c.description" class="text-caption text-grey">
+                {{ c.description }}
               </div>
             </td>
             
             <td class="text-center align-top">
-              <div v-if="criteria.self_score !== null" class="mb-2">
+              <div v-if="c.self_score !== null" class="mb-2">
                 <v-chip color="blue-lighten-4" variant="flat" class="font-weight-bold text-blue-darken-4">
-                  {{ criteria.self_score }} คะแนน
+                  {{ c.self_score }} คะแนน
                 </v-chip>
-                <div v-if="criteria.self_comment" class="text-caption text-grey font-italic mt-2 pa-2 bg-grey-lighten-5 rounded">
-                  "{{ criteria.self_comment }}"
+                <div v-if="c.self_comment" class="text-caption text-grey font-italic mt-2 pa-2 bg-grey-lighten-5 rounded">
+                  "{{ c.self_comment }}"
                 </div>
                 <div class="d-flex flex-column gap-2 align-center mt-2">
-                  <v-btn v-if="criteria.self_evidence_url" :href="getExternalLink(criteria.self_evidence_url)" target="_blank" size="small" prepend-icon="mdi-link" variant="flat" color="blue-darken-1" class="text-white w-100" style="max-width: 200px;">
+                  <v-btn v-if="c.self_evidence_url" :href="getExternalLink(c.self_evidence_url)" target="_blank" size="small" prepend-icon="mdi-link" variant="flat" color="blue-darken-1" class="text-white w-100" style="max-width: 200px;">
                     เปิดลิงก์แนบ
                   </v-btn>
-                  <v-btn v-if="criteria.self_evidence_file" :href="getFileUrl(criteria.self_evidence_file)" target="_blank" size="small" prepend-icon="mdi-file-eye" variant="flat" color="teal-darken-1" class="text-white w-100" style="max-width: 200px;">
+                  <v-btn v-if="c.self_evidence_file" :href="getFileUrl(c.self_evidence_file)" target="_blank" size="small" prepend-icon="mdi-file-eye" variant="flat" color="teal-darken-1" class="text-white w-100" style="max-width: 200px;">
                     ดูไฟล์แนบ
                   </v-btn>
                 </div>
@@ -72,24 +72,24 @@
               <div class="d-flex justify-space-between align-center mb-2">
                  <div class="font-weight-bold text-caption text-grey-darken-2">คะแนนที่ให้:</div>
                  
-                 <div v-if="criteria.my_score !== null" class="text-caption text-success font-weight-bold">
+                 <div v-if="c.my_score !== null" class="text-caption text-success font-weight-bold">
                     <v-icon start size="x-small" color="success">mdi-check-circle</v-icon>
-                    บันทึกแล้ว: {{ criteria.my_score }}
+                    บันทึกแล้ว: {{ c.my_score }}
                  </div>
               </div>
 
-              <v-radio-group v-model="gradingData[criteria.id].score" inline density="compact" hide-details class="mb-2">
-                <template v-if="criteria.scoring_type === 'scale'">
+              <v-radio-group v-model="formModels[c.id].score" inline density="compact" hide-details class="mb-2">
+                <template v-if="c.scoring_type === 'scale'">
                   <v-radio v-for="n in 4" :key="n" :label="n.toString()" :value="n" color="primary"></v-radio>
                 </template>
                 <template v-else>
                   <v-radio label="ไม่ผ่าน (0)" :value="0" color="error"></v-radio>
-                  <v-radio :label="`ผ่าน (${criteria.max_score})`" :value="criteria.max_score" color="success"></v-radio>
+                  <v-radio :label="`ผ่าน (${c.max_score})`" :value="c.max_score" color="success"></v-radio>
                 </template>
               </v-radio-group>
               
               <v-text-field
-                v-model="gradingData[criteria.id].comment"
+                v-model="formModels[c.id].comment"
                 label="ความคิดเห็น / ข้อเสนอแนะ"
                 variant="outlined"
                 density="compact"
@@ -139,7 +139,7 @@
               </div>
 
               <v-file-input
-                v-model="signatureFileInput"
+                v-model="signatureFile"
                 :label="existingSignature ? 'เปลี่ยนลายเซ็น (อัปโหลดทับ)' : 'อัปโหลดลายเซ็นดิจิทัล'"
                 variant="outlined"
                 accept=".jpg,.jpeg,.png,.pdf"
@@ -156,7 +156,7 @@
                 color="success"
                 size="large"
                 width="200"
-                :loading="isSubmitting"
+                :loading="submitLoading"
                 prepend-icon="mdi-content-save-check"
                 class="font-weight-bold"
               >
@@ -186,16 +186,18 @@ const router = useRouter();
 const roundId = ref(route.params.roundId);
 const evaluateeId = ref(route.params.evaluateeId);
 
-// State Variables
-const criteriasList = ref([]);
-const gradingData = reactive({});
+const criterias = ref([]);
+const formModels = reactive({});
 const overallComment = ref('');
-const signatureFileInput = ref([]); 
+const signatureFile = ref([]); 
 const existingSignature = ref(null);
-const isLoading = ref(true);
-const isSubmitting = ref(false);
+const loading = ref(true);
+const submitLoading = ref(false);
 const snackbar = reactive({ show: false, message: '', color: 'success' });
 
+// ---------------------------------------------------------
+// [FIXED] ย้าย showSnackbar ขึ้นมาประกาศก่อนที่จะถูกเรียกใช้งาน
+// ---------------------------------------------------------
 const showSnackbar = (msg, color) => {
   snackbar.message = msg;
   snackbar.color = color;
@@ -231,14 +233,14 @@ onMounted(async () => {
 });
 
 const fetchData = async () => {
-  isLoading.value = true;
+  loading.value = true;
   try {
     const res = await api.get(`/committee/grading/${roundId.value}/${evaluateeId.value}`);
-    criteriasList.value = res.data.data;
+    criterias.value = res.data.data;
     overallComment.value = res.data.overall_comment || '';
     
-    if (criteriasList.value.length > 0) {
-      const firstItem = criteriasList.value[0];
+    if (criterias.value.length > 0) {
+      const firstItem = criterias.value[0];
       if (firstItem.my_evidence_file) {
         existingSignature.value = firstItem.my_evidence_file;
       } else if (firstItem.profile_signature) {
@@ -246,11 +248,11 @@ const fetchData = async () => {
       }
     }
 
-    criteriasList.value.forEach(item => {
-      const hasScore = item.my_score !== null && item.my_score !== undefined;
-      gradingData[item.id] = {
-        score: hasScore ? Number(item.my_score) : null, 
-        comment: item.my_comment || '',
+    criterias.value.forEach(c => {
+      const hasScore = c.my_score !== null && c.my_score !== undefined;
+      formModels[c.id] = {
+        score: hasScore ? Number(c.my_score) : null, 
+        comment: c.my_comment || '',
       };
     });
 
@@ -258,41 +260,39 @@ const fetchData = async () => {
     console.error(error);
     showSnackbar('โหลดข้อมูลล้มเหลว', 'error');
   } finally {
-    isLoading.value = false;
+    loading.value = false;
   }
 };
 
 const handleSubmitGrading = async () => {
-  isSubmitting.value = true;
+  submitLoading.value = true;
   
   try {
     let signaturePath = existingSignature.value; 
     
-    if (signatureFileInput.value && signatureFileInput.value.length > 0) {
-      const file = signatureFileInput.value[0];
+    if (signatureFile.value && signatureFile.value.length > 0) {
+      const file = signatureFile.value[0];
       signaturePath = await fileToBase64(file);
     }
     
-    const promises = criteriasList.value.map(item => {
-      const scoreToSend = gradingData[item.id].score !== null ? gradingData[item.id].score : 0;
+    const promises = criterias.value.map(c => {
+      const scoreToSend = formModels[c.id].score !== null ? formModels[c.id].score : 0;
 
       const payload = {
         round_id: roundId.value,
-        criteria_id: item.id,
+        criteria_id: c.id,
         evaluatee_id: evaluateeId.value,
         score: scoreToSend,
-        comment: gradingData[item.id].comment,
+        comment: formModels[c.id].comment,
       };
       
-      // Attach signature only to the first item (as per original logic logic) or handle separately
-      if (item.id === criteriasList.value[0].id) {
+      if (c.id === criterias.value[0].id) {
         payload.evidence_file = signaturePath;
       }
       
       return api.post('/committee/grade', payload);
     });
 
-    // Save Overall Comment
     promises.push(api.post('/committee/overall-comment', {
         round_id: roundId.value,
         evaluatee_id: evaluateeId.value,
@@ -311,7 +311,7 @@ const handleSubmitGrading = async () => {
     console.error("Submit Error:", error);
     showSnackbar(error.response?.data?.message || 'เกิดข้อผิดพลาดในการบันทึก', 'error');
   } finally {
-    isSubmitting.value = false;
+    submitLoading.value = false;
   }
 };
 </script>

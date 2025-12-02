@@ -1,9 +1,6 @@
-// File: frontend/src/router/index.js
-
 import { createRouter, createWebHistory } from 'vue-router';
 import { useAuthStore } from '../stores/authStore';
 
-// Layouts & Auth
 import MainLayout from '../layouts/MainLayout.vue';
 import Login from '../pages/Login.vue';
 import Register from '../pages/Register.vue';
@@ -17,6 +14,7 @@ const ManageUsers = () => import('../pages/admin/ManageUsers.vue');
 const CommitteeSummary = () => import('../pages/admin/CommitteeSummary.vue');
 const CommitteeTracking = () => import('../pages/admin/CommitteeTracking.vue');
 const EvaluateeTracking = () => import('../pages/admin/EvaluateeTracking.vue');
+// [เพิ่มบรรทัดนี้] Import หน้าดูรายงาน
 const IndividualReport = () => import('../pages/admin/IndividualReport.vue'); 
 
 // User Pages
@@ -30,17 +28,14 @@ const EvaluationList = () => import('../pages/committee/EvaluationList.vue');
 const Grading = () => import('../pages/committee/Grading.vue');
 
 const routes = [
-  // Public Routes
   { path: '/login', name: 'Login', component: Login, meta: { requiresAuth: false } },
   { path: '/register', name: 'Register', component: Register, meta: { requiresAuth: false } },
-  
-  // Protected Routes
   {
     path: '/',
     component: MainLayout,
     meta: { requiresAuth: true },
     children: [
-      // --- Admin Routes ---
+      // Admin Routes
       { path: 'dashboard', component: Dashboard, meta: { roles: ['admin'] } },
       { path: 'admin/rounds', component: ManageRounds, meta: { roles: ['admin'] } },
       { path: 'manage-criteria', component: ManageCriteria, meta: { roles: ['admin'] } },
@@ -49,21 +44,22 @@ const routes = [
       { path: 'admin/committee-summary', component: CommitteeSummary, meta: { roles: ['admin'] } },
       { path: 'admin/committee-tracking', component: CommitteeTracking, meta: { roles: ['admin'] } },
       { path: 'admin/evaluatee-tracking', component: EvaluateeTracking, meta: { roles: ['admin'] } },
+      
+      // [เพิ่มส่วนนี้] Route สำหรับหน้าดูรายงาน
       { path: 'admin/report/:roundId/:userId', component: IndividualReport, meta: { roles: ['admin'] } },
 
-      // --- User Routes ---
+      // User Routes
       { path: 'self-assessment', component: SelfAssessment, meta: { roles: ['user'] } },
       { path: 'my-report', component: MyReport, meta: { roles: ['user'] } },
       { path: 'progress', component: UserProgress, meta: { roles: ['user'] } },
       
-      // --- Shared Profile ---
+      // Profile Route
       { path: 'profile', component: Profile, meta: { roles: ['admin', 'user', 'committee'] } },
 
-      // --- Committee Routes ---
+      // Committee Routes
       { path: 'evaluation-list', component: EvaluationList, meta: { roles: ['committee'] } },
       { path: 'grading/:roundId/:evaluateeId', component: Grading, meta: { roles: ['committee'] } },
       
-      // Default Redirect
       {
         path: '',
         redirect: () => {
@@ -83,32 +79,18 @@ const router = createRouter({
   routes,
 });
 
-// Global Navigation Guard
 router.beforeEach((to, from, next) => {
   const authStore = useAuthStore();
   const isAuthenticated = authStore.isAuthenticated;
   const requiresAuth = to.meta.requiresAuth;
-  const allowedRoles = to.meta.roles;
+  const requiredRoles = to.meta.roles;
 
-  // 1. Not Authenticated but trying to access protected route
-  if (requiresAuth && !isAuthenticated) {
-    return next('/login');
-  } 
-  
-  // 2. Authenticated but trying to access Login/Register
-  if (!requiresAuth && isAuthenticated && (to.path === '/login' || to.path === '/register')) {
-    return next('/');
-  }
-  
-  // 3. Role-based Access Control
-  if (isAuthenticated && allowedRoles) {
-    if (!allowedRoles.includes(authStore.user.role)) {
-      // User doesn't have permission -> Redirect to home
-      return next('/');
-    }
-  }
-
-  next();
+  if (requiresAuth && !isAuthenticated) next('/login');
+  else if (!requiresAuth && isAuthenticated && (to.path === '/login' || to.path === '/register')) next('/');
+  else if (isAuthenticated && requiredRoles) {
+    if (requiredRoles.includes(authStore.user.role)) next();
+    else next('/');
+  } else next();
 });
 
 export default router;

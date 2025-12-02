@@ -1,18 +1,14 @@
-// File: backend/controllers/authController.js
-
 const db = require('../config/database');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 require('dotenv').config({ path: '../.env' });
 
-/**
- * ลงทะเบียนผู้ใช้งานใหม่ (Register)
- */
 exports.register = async (req, res) => {
     try {
+        // ตรวจสอบว่า req.body มีข้อมูลครบหรือไม่ (แก้ปัญหา destructure property of undefined)
         const { username, password, fullname, role } = req.body;
 
-        // 1. ตรวจสอบข้อมูลนำเข้า (Validation)
+        // 1. เช็คว่ากรอกครบไหม
         if (!username || !password || !fullname || !role) {
             return res.status(400).json({ 
                 status: 'error', 
@@ -20,23 +16,23 @@ exports.register = async (req, res) => {
             });
         }
 
-        // 2. ตรวจสอบ Username ซ้ำ
-        const [existingUsers] = await db.execute('SELECT id FROM users WHERE username = ?', [username]);
-        if (existingUsers.length > 0) {
+        // 2. เช็คว่า Username ซ้ำไหม
+        const [existing] = await db.execute('SELECT id FROM users WHERE username = ?', [username]);
+        if (existing.length > 0) {
             return res.status(400).json({ 
                 status: 'error', 
                 message: 'Username นี้ถูกใช้งานแล้ว' 
             });
         }
 
-        // 3. เข้ารหัสรหัสผ่าน (Hash Password)
+        // 3. Hash Password
         const salt = await bcrypt.genSalt(10);
-        const passwordHash = await bcrypt.hash(password, salt);
+        const password_hash = await bcrypt.hash(password, salt);
 
-        // 4. บันทึกลงฐานข้อมูล
+        // 4. Insert User
         const [result] = await db.execute(
             'INSERT INTO users (username, password_hash, fullname, role) VALUES (?, ?, ?, ?)',
-            [username, passwordHash, fullname, role]
+            [username, password_hash, fullname, role]
         );
 
         res.status(201).json({
@@ -46,7 +42,7 @@ exports.register = async (req, res) => {
         });
 
     } catch (error) { 
-        console.error("Register Error:", error);
+        console.error("Register Error Details:", error);
         res.status(500).json({ 
             status: 'error', 
             message: error.message || 'เกิดข้อผิดพลาดที่ Server' 
@@ -54,14 +50,11 @@ exports.register = async (req, res) => {
     }
 };
 
-/**
- * เข้าสู่ระบบ (Login)
- */
 exports.login = async (req, res) => {
     try {
         const { username, password } = req.body;
 
-        // 1. ค้นหาผู้ใช้จาก Username
+        // Find User
         const [users] = await db.execute('SELECT * FROM users WHERE username = ?', [username]);
         
         if (users.length === 0) {
@@ -70,13 +63,13 @@ exports.login = async (req, res) => {
 
         const user = users[0];
 
-        // 2. ตรวจสอบรหัสผ่าน
-        const isPasswordMatch = await bcrypt.compare(password, user.password_hash);
-        if (!isPasswordMatch) {
+        // Check Password
+        const isMatch = await bcrypt.compare(password, user.password_hash);
+        if (!isMatch) {
             return res.status(401).json({ status: 'error', message: 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง' });
         }
 
-        // 3. สร้าง JWT Token
+        // Sign JWT
         const token = jwt.sign(
             { id: user.id, role: user.role, fullname: user.fullname },
             process.env.JWT_SECRET,
@@ -88,16 +81,11 @@ exports.login = async (req, res) => {
             message: 'เข้าสู่ระบบสำเร็จ',
             data: {
                 token,
-                user: { 
-                    id: user.id, 
-                    username: user.username, 
-                    role: user.role, 
-                    fullname: user.fullname 
-                }
+                user: { id: user.id, username: user.username, role: user.role, fullname: user.fullname }
             }
         });
     } catch (error) { 
-        console.error("Login Error:", error);
+        console.error("Login Error Details:", error);
         res.status(500).json({ status: 'error', message: error.message });
     }
 };

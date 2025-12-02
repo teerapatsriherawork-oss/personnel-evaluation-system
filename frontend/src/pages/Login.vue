@@ -1,3 +1,5 @@
+<!-- [3.1] [7.1] หน้า Login สวยงาม -->
+<!-- src/pages/Login.vue -->
 <template>
   <v-container fluid class="fill-height" style="background-color: #f0f4f8;">
     <v-row align="center" justify="center">
@@ -6,15 +8,13 @@
           <v-toolbar color="primary" dark flat>
             <v-toolbar-title class="text-center">ระบบประเมินบุคลากร</v-toolbar-title>
           </v-toolbar>
-          
-          <v-card-text class="pt-6">
+          <v-card-text>
             <v-form @submit.prevent="handleLogin">
               <v-alert
                 v-if="errorMessage"
                 type="error"
-                variant="tonal"
+                variant="outlined"
                 class="mb-4"
-                density="compact"
               >
                 {{ errorMessage }}
               </v-alert>
@@ -22,40 +22,37 @@
               <v-text-field
                 v-model="username"
                 label="Username"
-                prepend-inner-icon="mdi-account"
-                variant="outlined"
+                prepend-icon="mdi-account"
+                type="text"
                 required
-                class="mb-2"
+                variant="outlined"
+                class="mb-3"
               ></v-text-field>
 
               <v-text-field
                 v-model="password"
                 label="Password"
-                prepend-inner-icon="mdi-lock"
+                prepend-icon="mdi-lock"
                 type="password"
-                variant="outlined"
                 required
-                class="mb-4"
+                variant="outlined"
+                class="mb-3"
               ></v-text-field>
 
               <v-btn
-                :loading="isLoading"
-                :disabled="isLoading"
+                :loading="loading"
+                :disabled="loading"
                 type="submit"
                 color="primary"
                 block
                 size="large"
-                class="text-uppercase font-weight-bold"
               >
-                เข้าสู่ระบบ
+                Login
               </v-btn>
             </v-form>
           </v-card-text>
-          
-          <v-card-actions class="justify-center pa-4 bg-grey-lighten-5">
-            <router-link to="/register" class="text-decoration-none text-body-2 font-weight-medium">
-              ยังไม่มีบัญชี? ลงทะเบียนที่นี่
-            </router-link>
+          <v-card-actions class="justify-center pa-4">
+            <router-link to="/register">ยังไม่มีบัญชี? ลงทะเบียนที่นี่</router-link>
           </v-card-actions>
         </v-card>
       </v-col>
@@ -70,7 +67,7 @@ import { useAuthStore } from '../stores/authStore';
 const authStore = useAuthStore();
 const username = ref('');
 const password = ref('');
-const isLoading = ref(false);
+const loading = ref(false);
 const errorMessage = ref(null);
 
 const handleLogin = async () => {
@@ -79,26 +76,26 @@ const handleLogin = async () => {
     return;
   }
   
-  isLoading.value = true;
+  loading.value = true;
   errorMessage.value = null;
   
   try {
     await authStore.login(username.value, password.value);
+    //
   } catch (error) {
-    errorMessage.value = error.response?.data?.message || "เข้าสู่ระบบไม่สำเร็จ โปรดตรวจสอบข้อมูล";
+    errorMessage.value = error.response?.data?.message || "Login failed. Please try again.";
   } finally {
-    isLoading.value = false;
+    loading.value = false;
   }
 };
 </script>
 
 <style scoped>
 a {
-  color: #1976D2;
-  transition: opacity 0.2s;
+  text-decoration: none;
+  color: #1976D2; /* Vuetify Primary color */
 }
 a:hover {
-  opacity: 0.8;
   text-decoration: underline;
 }
 </style>

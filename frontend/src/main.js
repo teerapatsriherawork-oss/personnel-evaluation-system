@@ -1,14 +1,14 @@
-// File: frontend/src/main.js
+// [2] Setup Pinia, Router, Vuetify
+// src/main.js
 
 import { createApp } from 'vue';
 import { createPinia } from 'pinia';
 
-// App & Config
 import App from './App.vue';
 import router from './router';
 import vuetify from './plugins/vuetify';
 
-// Styles
+// Load CSS
 import 'vuetify/styles';
 import '@mdi/font/css/materialdesignicons.css';
 

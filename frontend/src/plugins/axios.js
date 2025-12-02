@@ -1,20 +1,17 @@
-// File: frontend/src/plugins/axios.js
+// [2] Setup Interceptor (Auto attach JWT Token)
+// src/plugins/axios.js
 
 import axios from 'axios';
 import { useAuthStore } from '../stores/authStore';
 
-// Create Axios Instance
 const api = axios.create({
-  baseURL: 'http://localhost:5000/api', 
+  baseURL: 'http://localhost:5000/api', // URL ของ Backend (จาก Part 2)
   headers: {
     'Content-Type': 'application/json'
   }
 });
 
-// ==========================================
 // Request Interceptor
-// ==========================================
-// แนบ Token ไปกับทุก Request ถ้ามี Token ใน Store
 api.interceptors.request.use(
   (config) => {
     const authStore = useAuthStore();
@@ -28,10 +25,7 @@ api.interceptors.request.use(
   }
 );
 
-// ==========================================
-// Response Interceptor
-// ==========================================
-// จัดการกรณี Token หมดอายุ (401) ให้ Logout อัตโนมัติ
+// Response Interceptor (Optional: Handle 401 for auto-logout)
 api.interceptors.response.use(
   (response) => {
     return response;
@@ -39,8 +33,8 @@ api.interceptors.response.use(
   (error) => {
     if (error.response && error.response.status === 401) {
       const authStore = useAuthStore();
-      authStore.logout(); 
-      console.warn('Session expired (401). Logging out...');
+      authStore.logout(); // ถ้า Token หมดอายุ ให้ Logout
+      console.error('Unauthorized, logging out.');
     }
     return Promise.reject(error);
   }

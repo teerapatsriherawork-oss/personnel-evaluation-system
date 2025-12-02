@@ -4,32 +4,29 @@ const db = require('../config/database');
 const fs = require('fs');
 const path = require('path');
 
-/**
- * Helper: บันทึกไฟล์จาก Base64 String
- */
+// [FIXED] แก้ไข Regex ให้ถูกต้อง และเพิ่ม Log
 const saveBase64ToFile = (base64String) => {
-    // ถ้าไม่ใช่ Base64 หรือเป็น path เดิม ให้คืนค่าเดิม
+    // ถ้าไม่มีข้อมูล หรือไม่ใช่ base64 (อาจเป็น path เดิม) ให้คืนค่าเดิม
     if (!base64String || typeof base64String !== 'string' || !base64String.startsWith('data:')) {
         return base64String;
     }
 
     try {
-        // Regex สำหรับแยก Header และ Data ของ Base64
+        // [FIXED] Regex ที่ถูกต้อง: ย้ายเครื่องหมาย - ไปไว้ท้ายสุดของ Group
         const matches = base64String.match(/^data:([A-Za-z0-9+\/-]+);base64,(.+)$/);
         
         if (!matches || matches.length !== 3) {
-            console.error("[Committee] Invalid Base64 format");
+            console.error("[Base64] Invalid format pattern");
             return null;
         }
 
-        const mimeType = matches[1];
-        const fileData = Buffer.from(matches[2], 'base64');
+        const type = matches[1];
+        const data = Buffer.from(matches[2], 'base64');
         
-        // กำหนดนามสกุลไฟล์ตาม Mime Type
         let extension = 'bin';
-        if (mimeType.includes('jpeg') || mimeType.includes('jpg')) extension = 'jpg';
-        else if (mimeType.includes('png')) extension = 'png';
-        else if (mimeType.includes('pdf')) extension = 'pdf';
+        if (type.includes('jpeg') || type.includes('jpg')) extension = 'jpg';
+        else if (type.includes('png')) extension = 'png';
+        else if (type.includes('pdf')) extension = 'pdf';
 
         const filename = `sign-${Date.now()}-${Math.round(Math.random() * 1E9)}.${extension}`;
         const uploadDir = path.join(__dirname, '../uploads');
@@ -39,27 +36,25 @@ const saveBase64ToFile = (base64String) => {
         }
 
         const filepath = path.join(uploadDir, filename);
-        fs.writeFileSync(filepath, fileData);
+        fs.writeFileSync(filepath, data);
         
+        console.log(`[Committee] Saved signature file: ${filename}`);
         return `/uploads/${filename}`;
 
     } catch (e) {
-        console.error("[Committee] Error saving file:", e);
+        console.error("[Base64] Error saving file:", e);
         return null;
     }
 };
 
-/**
- * ดึงรายชื่อผู้ที่กรรมการคนนี้ต้องประเมิน
- */
+// 1. ดึงรายชื่อผู้ที่กรรมการคนนี้ต้องประเมิน [RESTORED]
 exports.getEvaluatees = async (req, res) => {
     try {
         const evaluatorId = req.user.id;
         const { roundId } = req.params;
 
-        // หาจำนวนเกณฑ์ทั้งหมดในรอบนี้เพื่อคำนวณสถานะความคืบหน้า
-        const [countResult] = await db.execute('SELECT COUNT(*) as total FROM criterias WHERE round_id = ?', [roundId]);
-        const totalCriteria = countResult[0].total;
+        const [criCount] = await db.execute('SELECT COUNT(*) as total FROM criterias WHERE round_id = ?', [roundId]);
+        const totalCriteria = criCount[0].total;
 
         const sql = `
             SELECT 
@@ -77,24 +72,24 @@ exports.getEvaluatees = async (req, res) => {
             WHERE cm.round_id = ? AND cm.evaluator_id = ?
         `;
         
-        const [evaluateesList] = await db.execute(sql, [roundId, evaluatorId]);
+        const [rows] = await db.execute(sql, [roundId, evaluatorId]);
 
-        const formattedData = evaluateesList.map(evaluateeData => {
+        const evaluatees = rows.map(row => {
             let status = 'pending';
             if (totalCriteria > 0) {
-                if (evaluateeData.evaluated_count >= totalCriteria) status = 'completed';
-                else if (evaluateeData.evaluated_count > 0) status = 'in_progress';
+                if (row.evaluated_count >= totalCriteria) status = 'completed';
+                else if (row.evaluated_count > 0) status = 'in_progress';
             }
             
             return {
-                ...evaluateeData,
+                ...row,
                 total_criteria: totalCriteria,
                 is_completed: status === 'completed',
                 is_started: status === 'in_progress'
             };
         });
 
-        res.status(200).json({ status: 'success', data: formattedData });
+        res.status(200).json({ status: 'success', data: evaluatees });
 
     } catch (error) {
         console.error(error);
@@ -102,76 +97,73 @@ exports.getEvaluatees = async (req, res) => {
     }
 };
 
-/**
- * ดึงข้อมูลสำหรับหน้าให้คะแนน (Grading Interface)
- */
+// 2. ดึงข้อมูลสำหรับหน้าให้คะแนน [RESTORED]
 exports.getGradingInfo = async (req, res) => {
     try {
         const evaluatorId = req.user.id;
         const { roundId, evaluateeId } = req.params;
 
-        // 1. ดึงเกณฑ์ทั้งหมด
-        const sqlCriteria = `
+        // ดึง Criteria
+        const sql = `
             SELECT c.*, t.topic_name
             FROM criterias c
             JOIN topics t ON c.topic_id = t.id
             WHERE c.round_id = ?
             ORDER BY c.id ASC
         `;
-        const [criterias] = await db.execute(sqlCriteria, [roundId]);
+        const [criterias] = await db.execute(sql, [roundId]);
 
-        // 2. ดึงคะแนนประเมินตนเองของผู้ถูกประเมิน
+        // ดึงคะแนนประเมินตนเอง
         const [selfEvals] = await db.execute(
             'SELECT * FROM evaluations WHERE round_id = ? AND evaluatee_id = ? AND evaluator_id = ?',
             [roundId, evaluateeId, evaluateeId]
         );
 
-        // 3. ดึงคะแนนที่กรรมการคนนี้เคยให้ไว้ (ถ้ามี)
+        // ดึงคะแนนที่กรรมการคนนี้เคยให้ไปแล้ว
         const [myEvals] = await db.execute(
             'SELECT * FROM evaluations WHERE round_id = ? AND evaluatee_id = ? AND evaluator_id = ?',
             [roundId, evaluateeId, evaluatorId]
         );
 
-        // 4. ดึงความคิดเห็นสรุป (Overall Comment)
+        // ดึงความคิดเห็นสรุป (Overall Comment)
         const [mappingRes] = await db.execute(
             'SELECT overall_comment FROM committees_mapping WHERE round_id = ? AND evaluator_id = ? AND evaluatee_id = ?',
             [roundId, evaluatorId, evaluateeId]
         );
         const overallComment = mappingRes.length > 0 ? mappingRes[0].overall_comment : '';
 
-        // 5. จัดการลายเซ็น (ใช้จากไฟล์ที่แนบในข้อแรก หรือจาก Profile)
+        // ดึงลายเซ็นเดิม (ถ้าเคยเซ็นไว้ในข้อแรก หรือจาก Profile)
         let profileSignature = null;
         const lastEvalWithFile = myEvals.find(e => e.evidence_file);
-        if (lastEvalWithFile) {
-            profileSignature = lastEvalWithFile.evidence_file;
-        } else {
+        if (lastEvalWithFile) profileSignature = lastEvalWithFile.evidence_file;
+        
+        if (!profileSignature) {
              const [committeeData] = await db.execute('SELECT signature_path FROM users WHERE id = ?', [evaluatorId]);
              if(committeeData.length > 0) profileSignature = committeeData[0].signature_path;
         }
 
-        // 6. รวมข้อมูล
-        const data = criterias.map(criteriaItem => {
-            const selfData = selfEvals.find(e => e.criteria_id === criteriaItem.id);
-            const myData = myEvals.find(e => e.criteria_id === criteriaItem.id);
+        const data = criterias.map(c => {
+            const self = selfEvals.find(e => e.criteria_id === c.id);
+            const my = myEvals.find(e => e.criteria_id === c.id);
 
             return {
-                id: criteriaItem.id,
-                topic_name: criteriaItem.topic_name,
-                indicator_name: criteriaItem.indicator_name,
-                description: criteriaItem.description,
-                max_score: criteriaItem.max_score,
-                scoring_type: criteriaItem.scoring_type,
+                id: c.id,
+                topic_name: c.topic_name,
+                indicator_name: c.indicator_name,
+                description: c.description,
+                max_score: c.max_score,
+                scoring_type: c.scoring_type,
                 
-                // ข้อมูลของ User (Self Assessment)
-                self_score: (selfData && selfData.score != null) ? selfData.score : null,
-                self_comment: selfData ? selfData.comment : null,
-                self_evidence_url: selfData ? selfData.evidence_url : null,
-                self_evidence_file: selfData ? selfData.evidence_file : null,
+                // ข้อมูลประเมินตนเอง
+                self_score: (self && self.score != null) ? self.score : null,
+                self_comment: self ? self.comment : null,
+                self_evidence_url: self ? self.evidence_url : null,
+                self_evidence_file: self ? self.evidence_file : null,
                 
-                // ข้อมูลของ Committee (Grading)
-                my_score: (myData && myData.score != null) ? myData.score : null,
-                my_comment: myData ? myData.comment : '',
-                my_evidence_file: myData ? myData.evidence_file : null,
+                // ข้อมูลที่กรรมการเคยประเมินไว้
+                my_score: (my && my.score != null) ? my.score : null,
+                my_comment: my ? my.comment : '',
+                my_evidence_file: my ? my.evidence_file : null,
                 profile_signature: profileSignature 
             };
         });
@@ -184,20 +176,19 @@ exports.getGradingInfo = async (req, res) => {
     }
 };
 
-/**
- * บันทึกคะแนนรายข้อ
- */
+// 3. บันทึกการให้คะแนนรายข้อ [UPDATED Fix Base64 Logic]
 exports.submitGrading = async (req, res) => {
     try {
         const evaluatorId = req.user.id;
         let { round_id, criteria_id, evaluatee_id, score, comment, evidence_file } = req.body;
 
-        // จัดการไฟล์แนบ (เช่น ลายเซ็น)
+        // แปลงไฟล์ถ้ามี
         if (evidence_file && evidence_file.startsWith('data:')) {
             const savedPath = saveBase64ToFile(evidence_file);
             if (savedPath) {
                 evidence_file = savedPath;
             } else {
+                // ถ้า save ไม่ผ่าน (return null) ให้ใช้ค่าเดิมหรือไม่บันทึกทับ
                 evidence_file = null; 
             }
         }
@@ -208,10 +199,10 @@ exports.submitGrading = async (req, res) => {
         );
 
         if (existing.length > 0) {
-            // Update
             let sql = 'UPDATE evaluations SET score=?, comment=?, updated_at=NOW()';
             let params = [score, comment];
             
+            // อัปเดตไฟล์เฉพาะเมื่อมีการส่งไฟล์ใหม่มา (ไม่เป็น null)
             if (evidence_file) {
                 sql += ', evidence_file=?';
                 params.push(evidence_file);
@@ -221,7 +212,6 @@ exports.submitGrading = async (req, res) => {
             params.push(existing[0].id);
             await db.execute(sql, params);
         } else {
-            // Insert
             await db.execute(
                 'INSERT INTO evaluations (round_id, criteria_id, evaluatee_id, evaluator_id, score, comment, evidence_file) VALUES (?, ?, ?, ?, ?, ?, ?)',
                 [round_id, criteria_id, evaluatee_id, evaluatorId, score, comment, evidence_file]
@@ -236,9 +226,7 @@ exports.submitGrading = async (req, res) => {
     }
 };
 
-/**
- * บันทึกความคิดเห็นสรุป
- */
+// 4. บันทึกความคิดเห็นสรุป (Overall Comment)
 exports.submitOverallComment = async (req, res) => {
     try {
         const evaluatorId = req.user.id;

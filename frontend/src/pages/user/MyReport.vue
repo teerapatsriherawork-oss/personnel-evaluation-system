@@ -7,7 +7,7 @@
           รายงานผลการประเมิน
         </h1>
         <v-btn color="secondary" prepend-icon="mdi-printer" @click="printReport">
-          Print / PDF
+          Export PDF / Print
         </v-btn>
       </v-col>
     </v-row>
@@ -68,12 +68,8 @@
               <div class="font-weight-bold">{{ item.topic_name }}</div>
               <div class="text-caption text-grey-darken-1">{{ item.indicator_name }}</div>
             </td>
-            <td class="text-center">
-                {{ item.self_score > 0 ? item.self_score : '-' }}
-            </td>
-            <td class="text-center font-weight-bold">
-                {{ parseFloat(item.committee_score) > 0 ? item.committee_score : '-' }}
-            </td>
+            <td class="text-center">{{ item.self_score || '-' }}</td>
+            <td class="text-center font-weight-bold">{{ item.committee_score > 0 ? item.committee_score : '-' }}</td>
             <td>
               <div v-if="item.committee_comment" class="text-body-2 font-italic">
                 "{{ item.committee_comment }}"
@@ -86,11 +82,11 @@
       
       <div class="d-none d-print-flex justify-space-around mt-10 pt-10">
         <div class="text-center">
-          <div class="signature-line mb-2">&nbsp;</div>
+          <div class="border-bottom mb-2" style="width: 200px; margin: 0 auto;">&nbsp;</div>
           <div>ลงชื่อ ผู้รับการประเมิน</div>
         </div>
         <div class="text-center">
-          <div class="signature-line mb-2">&nbsp;</div>
+          <div class="border-bottom mb-2" style="width: 200px; margin: 0 auto;">&nbsp;</div>
           <div>ลงชื่อ ประธานกรรมการ</div>
         </div>
       </div>
@@ -114,6 +110,7 @@ const rounds = ref([]);
 const selectedRoundId = ref(null);
 const reportData = ref([]);
 
+// Computed for display
 const selectedRoundName = computed(() => {
   const r = rounds.value.find(i => i.id === selectedRoundId.value);
   return r ? r.round_name : '';
@@ -124,10 +121,12 @@ const totalSelfScore = computed(() => {
 });
 
 const totalCommitteeScore = computed(() => {
+  // รวมคะแนนเฉลี่ยที่ถูกคำนวณมาแล้ว (ใช้ parseFloat เพราะค่า committee_score ถูกคำนวณเป็นทศนิยม 2 ตำแหน่ง)
   return reportData.value.reduce((sum, item) => sum + parseFloat(item.committee_score || 0), 0);
 });
 
 const resultStatus = computed(() => {
+  // Mock logic for status based on score
   const score = totalCommitteeScore.value;
   if (score > 80) return 'ดีเยี่ยม';
   if (score > 50) return 'ผ่านเกณฑ์';
@@ -139,7 +138,7 @@ onMounted(async () => {
     const res = await api.get('/admin/rounds');
     rounds.value = res.data.data;
   } catch (error) {
-    console.error("Error fetching rounds:", error);
+    console.error(error);
   }
 });
 
@@ -147,52 +146,53 @@ const fetchReport = async () => {
   if (!selectedRoundId.value) return;
   
   try {
-    // 1. Fetch Criteria Structure
+    // 1. Get Criterias for structure
     const criRes = await api.get(`/admin/rounds/${selectedRoundId.value}/criterias`);
     const criterias = criRes.data.data;
 
-    // 2. Fetch User Evaluations
+    // 2. Get My Evaluations (Self + Committee)
     const evalRes = await api.get(`/user/evaluations/${selectedRoundId.value}`);
-    const evaluations = evalRes.data.data;
+    const selfEvals = evalRes.data.data;
     
-    // 3. Map Data
-    reportData.value = criterias.map(criteriaItem => {
-      const myEval = evaluations.find(e => 
-        e.criteria_id === criteriaItem.id && 
-        e.evaluator_id === userProfile.id
-      );
+    // [FIXED] ปรับ Logic การรวมคะแนนกรรมการให้เป็นค่าเฉลี่ย
+    reportData.value = criterias.map(c => {
+      // 1. ดึงคะแนนประเมินตนเอง
+      const myEval = selfEvals.find(e => e.criteria_id === c.id && e.evaluator_id === userProfile.id);
       
-      const committeeEvals = evaluations.filter(e => 
-        e.criteria_id === criteriaItem.id && 
+      // 2. ดึงคะแนนกรรมการทั้งหมด (evaluator_id ที่ไม่ใช่ ID ของฉัน)
+      const committeeEvals = selfEvals.filter(e => 
+        e.criteria_id === c.id && 
         e.evaluator_id !== userProfile.id
       );
 
-      let committeeAvgScore = 0;
+      let committeeScore = 0;
       let committeeComment = '';
 
       if (committeeEvals.length > 0) {
-        const total = committeeEvals.reduce((sum, e) => sum + Number(e.score || 0), 0);
-        committeeAvgScore = (total / committeeEvals.length).toFixed(2);
+        // คำนวณคะแนนเฉลี่ยจากกรรมการทุกคน
+        const totalScore = committeeEvals.reduce((sum, e) => sum + Number(e.score || 0), 0);
+        committeeScore = (totalScore / committeeEvals.length).toFixed(2);
         
-        // Show first comment found
+        // เลือก Comment ของกรรมการคนแรกที่พบมาแสดง
         committeeComment = committeeEvals[0].comment || ''; 
       }
 
       return {
-        id: criteriaItem.id,
-        topic_name: criteriaItem.topic_name,
-        indicator_name: criteriaItem.indicator_name,
+        id: c.id,
+        topic_name: c.topic_name,
+        indicator_name: c.indicator_name,
         self_score: myEval ? myEval.score : 0,
-        committee_score: committeeAvgScore,
+        committee_score: committeeScore, // เป็น String (2 ทศนิยม) หรือ 0
         committee_comment: committeeComment
       };
     });
 
   } catch (error) {
-    console.error("Error fetching report data:", error);
+    console.error(error);
   }
 };
 
+// [5.2.7] Print Function
 const printReport = () => {
   window.print();
 };
@@ -205,15 +205,25 @@ const printReport = () => {
 .report-table th, .report-table td {
   border-bottom: 1px solid #e0e0e0;
 }
-.signature-line {
-    width: 200px; 
-    margin: 0 auto; 
-    border-bottom: 1px solid #000;
-}
 
+/* Print Specific Styles */
 @media print {
-  body { -webkit-print-color-adjust: exact; }
-  .v-container { max-width: 100%; padding: 0; }
-  .d-print-none { display: none !important; }
+  /* Hide non-printable elements handled by d-print-none class */
+  
+  /* Force background colors */
+  body {
+    -webkit-print-color-adjust: exact;
+  }
+  
+  /* Setup Page */
+  @page {
+    margin: 2cm;
+  }
+  
+  .v-container {
+    max-width: 100% !important;
+    width: 100% !important;
+    padding: 0 !important;
+  }
 }
 </style>

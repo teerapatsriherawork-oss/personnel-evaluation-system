@@ -4,17 +4,15 @@
       <v-col cols="12" sm="8" md="5">
         <v-card class="elevation-12 rounded-lg">
           <v-toolbar color="primary" dark flat>
-            <v-toolbar-title class="text-center">ลงทะเบียนสมาชิกใหม่</v-toolbar-title>
+            <v-toolbar-title class="text-center">สร้างบัญชีผู้ใช้งานใหม่</v-toolbar-title>
           </v-toolbar>
-          
-          <v-card-text class="pt-6">
+          <v-card-text>
             <v-form @submit.prevent="handleRegister">
               <v-alert
                 v-if="errorMessage"
                 type="error"
-                variant="tonal"
+                variant="outlined"
                 class="mb-4"
-                density="compact"
               >
                 {{ errorMessage }}
               </v-alert>
@@ -22,51 +20,47 @@
               <v-text-field
                 v-model="formData.fullname"
                 label="ชื่อ-นามสกุล (Full Name)"
-                prepend-inner-icon="mdi-account-card-details"
-                variant="outlined"
+                prepend-icon="mdi-account-card-details"
+                type="text"
                 required
-                class="mb-2"
+                variant="outlined"
+                class="mb-3"
               ></v-text-field>
               
               <v-text-field
                 v-model="formData.username"
                 label="Username"
-                prepend-inner-icon="mdi-account"
-                variant="outlined"
+                prepend-icon="mdi-account"
+                type="text"
                 required
-                class="mb-2"
+                variant="outlined"
+                class="mb-3"
               ></v-text-field>
 
               <v-text-field
                 v-model="formData.password"
                 label="Password"
-                prepend-inner-icon="mdi-lock"
+                prepend-icon="mdi-lock"
                 type="password"
-                variant="outlined"
                 required
-                class="mb-4"
-                hint="รหัสผ่านต้องมีความยาวอย่างน้อย 6 ตัวอักษร"
-                persistent-hint
+                variant="outlined"
+                class="mb-3"
               ></v-text-field>
               
               <v-btn
-                :loading="isLoading"
-                :disabled="isLoading"
+                :loading="loading"
+                :disabled="loading"
                 type="submit"
                 color="primary"
                 block
                 size="large"
-                class="font-weight-bold"
               >
-                ยืนยันการสมัคร
+                Register
               </v-btn>
             </v-form>
           </v-card-text>
-          
-          <v-card-actions class="justify-center pa-4 bg-grey-lighten-5">
-            <router-link to="/login" class="text-decoration-none text-body-2 font-weight-medium">
-              มีบัญชีอยู่แล้ว? กลับไปหน้า Login
-            </router-link>
+          <v-card-actions class="justify-center pa-4">
+            <router-link to="/login">มีบัญชีอยู่แล้ว? กลับไปหน้า Login</router-link>
           </v-card-actions>
         </v-card>
       </v-col>
@@ -79,43 +73,40 @@ import { ref, reactive } from 'vue';
 import { useAuthStore } from '../stores/authStore';
 
 const authStore = useAuthStore();
-const isLoading = ref(false);
+const loading = ref(false);
 const errorMessage = ref(null);
 
 const formData = reactive({
   username: '',
   password: '',
   fullname: '',
-  role: 'user', // Default role for self-registration
+  role: 'user', // [แก้ไข] กำหนดค่าเริ่มต้นเป็น 'user' เสมอ
 });
 
 const handleRegister = async () => {
-  // 1. Validation
+  // ตรวจสอบข้อมูล (ไม่ต้องเช็ค role เพราะมีค่า default อยู่แล้ว)
   if (!formData.username || !formData.password || !formData.fullname) {
     errorMessage.value = "กรุณากรอกข้อมูลให้ครบถ้วน";
     return;
   }
-  if (formData.password.length < 6) {
-    errorMessage.value = "รหัสผ่านต้องมีความยาวอย่างน้อย 6 ตัวอักษร";
-    return;
-  }
   
-  isLoading.value = true;
+  loading.value = true;
   errorMessage.value = null;
   
   try {
     await authStore.register(formData);
-    // authStore will redirect on success
+    // authStore.register จะ redirect ไปหน้า login เองเมื่อสำเร็จ
   } catch (error) {
-    errorMessage.value = error.response?.data?.message || "การลงทะเบียนล้มเหลว โปรดลองใหม่อีกครั้ง";
+    errorMessage.value = error.response?.data?.message || "Registration failed. Please try again.";
   } finally {
-    isLoading.value = false;
+    loading.value = false;
   }
 };
 </script>
 
 <style scoped>
 a {
+  text-decoration: none;
   color: #1976D2;
 }
 a:hover {

@@ -40,19 +40,19 @@
                   density="compact"
                   append-inner-icon="mdi-plus-circle"
                   @click:append-inner="createTopic"
-                  :loading="isTopicLoading"
+                  :loading="topicLoading"
                 ></v-text-field>
               </v-form>
 
               <v-list density="compact" class="mt-2 border rounded">
                 <v-list-subheader>รายชื่อหัวข้อที่มีอยู่</v-list-subheader>
                 
-                <v-list-item v-for="topic in topicsList" :key="topic.id">
+                <v-list-item v-for="t in topics" :key="t.id">
                   <template v-slot:prepend>
                     <v-icon icon="mdi-label" color="secondary" size="small"></v-icon>
                   </template>
                   
-                  <v-list-item-title>{{ topic.topic_name }}</v-list-item-title>
+                  <v-list-item-title>{{ t.topic_name }}</v-list-item-title>
 
                   <template v-slot:append>
                     <v-btn 
@@ -60,19 +60,19 @@
                       size="x-small" 
                       variant="text" 
                       color="primary"
-                      @click="openEditTopicDialog(topic)"
+                      @click="openEditTopic(t)"
                     ></v-btn>
                     <v-btn 
                       icon="mdi-delete" 
                       size="x-small" 
                       variant="text" 
                       color="error"
-                      @click="confirmDeleteTopic(topic)"
+                      @click="confirmDeleteTopic(t)"
                     ></v-btn>
                   </template>
                 </v-list-item>
 
-                <v-list-item v-if="topicsList.length === 0">
+                <v-list-item v-if="topics.length === 0">
                   <div class="text-caption text-grey text-center">ยังไม่มีหัวข้อ</div>
                 </v-list-item>
               </v-list>
@@ -89,7 +89,7 @@
               <v-form @submit.prevent="createCriteria" ref="criForm">
                 <v-select
                   v-model="criteriaForm.topic_id"
-                  :items="topicsList"
+                  :items="topics"
                   item-title="topic_name"
                   item-value="id"
                   label="เลือกหัวข้อ (Topic)"
@@ -146,7 +146,7 @@
                   class="mb-4"
                 ></v-checkbox>
 
-                <v-btn type="submit" color="success" block :loading="isCriteriaLoading">
+                <v-btn type="submit" color="success" block :loading="criLoading">
                   บันทึกตัวชี้วัด
                 </v-btn>
               </v-form>
@@ -182,7 +182,7 @@
                       size="x-small"
                       variant="text"
                       color="primary"
-                      @click="openEditCriteriaDialog(item)"
+                      @click="openEditCriteria(item)"
                     ></v-btn>
                     <v-btn
                       icon="mdi-delete"
@@ -244,7 +244,7 @@
           <v-form @submit.prevent="saveEditCriteria">
             <v-select
               v-model="editingCriteria.topic_id"
-              :items="topicsList"
+              :items="topics"
               item-title="topic_name"
               item-value="id"
               label="เลือกหัวข้อ (Topic)"
@@ -325,17 +325,16 @@
 import { ref, reactive, onMounted, watch } from 'vue';
 import api from '../../plugins/axios';
 
-// State
 const rounds = ref([]);
 const selectedRoundId = ref(null);
-const topicsList = ref([]);
+const topics = ref([]);
 const criteriaList = ref([]);
 
-const isTopicLoading = ref(false);
-const isCriteriaLoading = ref(false);
+const topicLoading = ref(false);
+const criLoading = ref(false);
 const snackbar = reactive({ show: false, message: '', color: 'success' });
 
-// Create Forms
+// Forms Create
 const topicForm = reactive({ topic_name: '' });
 const criteriaForm = reactive({
   topic_id: null,
@@ -346,12 +345,13 @@ const criteriaForm = reactive({
   require_evidence: false
 });
 
-// Edit/Delete State
+// Edit/Delete Topics
 const editTopicDialog = ref(false);
 const deleteTopicDialog = ref(false);
 const editingTopic = reactive({ id: null, topic_name: '' });
 const topicToDelete = ref(null);
 
+// [NEW] Edit/Delete Criteria
 const editCriteriaDialog = ref(false);
 const deleteCriteriaDialog = ref(false);
 const editingCriteria = reactive({});
@@ -361,9 +361,7 @@ onMounted(async () => {
   try {
     const res = await api.get('/admin/rounds');
     rounds.value = res.data.data;
-  } catch (error) { 
-    console.error("Error fetching rounds:", error); 
-  }
+  } catch (error) { console.error(error); }
 });
 
 watch(selectedRoundId, async (newId) => {
@@ -373,45 +371,44 @@ watch(selectedRoundId, async (newId) => {
   }
 });
 
-// --- Fetch Functions ---
 const fetchTopics = async (roundId) => {
   try {
     const res = await api.get(`/admin/rounds/${roundId}/topics`);
-    topicsList.value = res.data.data;
-  } catch (error) { 
-    console.error("Error fetching topics:", error); 
-  }
+    topics.value = res.data.data;
+  } catch (error) { console.error(error); }
 };
 
 const fetchCriterias = async (roundId) => {
   try {
     const res = await api.get(`/admin/rounds/${roundId}/criterias`);
     criteriaList.value = res.data.data;
-  } catch (error) { 
-    console.error("Error fetching criterias:", error); 
-  }
+  } catch (error) { console.error(error); }
 };
 
-// --- Topic Handlers ---
+// --- Manage Topics ---
 const createTopic = async () => {
   if (!topicForm.topic_name) return;
-  isTopicLoading.value = true;
+  topicLoading.value = true;
   try {
     await api.post('/admin/topics', {
       round_id: selectedRoundId.value,
       topic_name: topicForm.topic_name
     });
-    showSnackbar('เพิ่มหัวข้อสำเร็จ', 'success');
+    snackbar.message = 'เพิ่มหัวข้อสำเร็จ';
+    snackbar.color = 'success';
+    snackbar.show = true;
     topicForm.topic_name = '';
     await fetchTopics(selectedRoundId.value);
   } catch (error) {
-    showSnackbar('เกิดข้อผิดพลาดในการสร้างหัวข้อ', 'error');
+    snackbar.message = 'เกิดข้อผิดพลาด';
+    snackbar.color = 'error';
+    snackbar.show = true;
   } finally {
-    isTopicLoading.value = false;
+    topicLoading.value = false;
   }
 };
 
-const openEditTopicDialog = (topic) => {
+const openEditTopic = (topic) => {
   editingTopic.id = topic.id;
   editingTopic.topic_name = topic.topic_name;
   editTopicDialog.value = true;
@@ -421,12 +418,16 @@ const saveEditTopic = async () => {
   if (!editingTopic.topic_name) return;
   try {
     await api.put(`/admin/topics/${editingTopic.id}`, { topic_name: editingTopic.topic_name });
-    showSnackbar('แก้ไขหัวข้อสำเร็จ', 'success');
+    snackbar.message = 'แก้ไขหัวข้อสำเร็จ';
+    snackbar.color = 'success';
+    snackbar.show = true;
     editTopicDialog.value = false;
     await fetchTopics(selectedRoundId.value);
-    await fetchCriterias(selectedRoundId.value); // Refresh in case topic name change affects list
+    await fetchCriterias(selectedRoundId.value);
   } catch (error) {
-    showSnackbar('แก้ไขหัวข้อไม่สำเร็จ', 'error');
+    snackbar.message = 'แก้ไขไม่สำเร็จ';
+    snackbar.color = 'error';
+    snackbar.show = true;
   }
 };
 
@@ -439,44 +440,54 @@ const submitDeleteTopic = async () => {
   if (!topicToDelete.value) return;
   try {
     await api.delete(`/admin/topics/${topicToDelete.value.id}`);
-    showSnackbar('ลบหัวข้อสำเร็จ', 'success');
+    snackbar.message = 'ลบหัวข้อสำเร็จ';
+    snackbar.color = 'success';
+    snackbar.show = true;
     deleteTopicDialog.value = false;
     await fetchTopics(selectedRoundId.value);
     await fetchCriterias(selectedRoundId.value);
   } catch (error) {
-    showSnackbar('ลบหัวข้อไม่สำเร็จ', 'error');
+    snackbar.message = 'ลบไม่สำเร็จ';
+    snackbar.color = 'error';
+    snackbar.show = true;
   }
 };
 
-// --- Criteria Handlers ---
+// --- Manage Criterias ---
 const createCriteria = async () => {
   if (!criteriaForm.topic_id || !criteriaForm.indicator_name) {
-    showSnackbar('กรุณากรอกข้อมูลให้ครบ', 'warning');
+    snackbar.message = 'กรุณากรอกข้อมูลให้ครบ';
+    snackbar.color = 'warning';
+    snackbar.show = true;
     return;
   }
-  isCriteriaLoading.value = true;
+  criLoading.value = true;
   try {
     await api.post('/admin/criterias', {
       round_id: selectedRoundId.value,
       ...criteriaForm
     });
-    showSnackbar('บันทึกตัวชี้วัดเรียบร้อย', 'success');
+    snackbar.message = 'บันทึกตัวชี้วัดเรียบร้อย';
+    snackbar.color = 'success';
+    snackbar.show = true;
     
-    // Reset Form
     criteriaForm.indicator_name = '';
     criteriaForm.description = '';
     criteriaForm.require_evidence = false;
-    
     await fetchCriterias(selectedRoundId.value);
   } catch (error) {
-    showSnackbar('เกิดข้อผิดพลาดในการสร้างตัวชี้วัด', 'error');
+    snackbar.message = 'เกิดข้อผิดพลาด';
+    snackbar.color = 'error';
+    snackbar.show = true;
   } finally {
-    isCriteriaLoading.value = false;
+    criLoading.value = false;
   }
 };
 
-const openEditCriteriaDialog = (item) => {
+// [NEW] Edit Criteria
+const openEditCriteria = (item) => {
   Object.assign(editingCriteria, item);
+  // เนื่องจาก boolean จาก DB อาจมาเป็น 0/1 ให้แปลงเป็น true/false ถ้าจำเป็น
   editingCriteria.require_evidence = !!item.require_evidence;
   editCriteriaDialog.value = true;
 };
@@ -484,14 +495,19 @@ const openEditCriteriaDialog = (item) => {
 const saveEditCriteria = async () => {
   try {
     await api.put(`/admin/criterias/${editingCriteria.id}`, editingCriteria);
-    showSnackbar('แก้ไขตัวชี้วัดสำเร็จ', 'success');
+    snackbar.message = 'แก้ไขตัวชี้วัดสำเร็จ';
+    snackbar.color = 'success';
+    snackbar.show = true;
     editCriteriaDialog.value = false;
     await fetchCriterias(selectedRoundId.value);
   } catch (error) {
-    showSnackbar('แก้ไขตัวชี้วัดไม่สำเร็จ', 'error');
+    snackbar.message = 'แก้ไขไม่สำเร็จ';
+    snackbar.color = 'error';
+    snackbar.show = true;
   }
 };
 
+// [NEW] Delete Criteria
 const confirmDeleteCriteria = (item) => {
   criteriaToDelete.value = item;
   deleteCriteriaDialog.value = true;
@@ -501,18 +517,15 @@ const submitDeleteCriteria = async () => {
   if (!criteriaToDelete.value) return;
   try {
     await api.delete(`/admin/criterias/${criteriaToDelete.value.id}`);
-    showSnackbar('ลบตัวชี้วัดสำเร็จ', 'success');
+    snackbar.message = 'ลบตัวชี้วัดสำเร็จ';
+    snackbar.color = 'success';
+    snackbar.show = true;
     deleteCriteriaDialog.value = false;
     await fetchCriterias(selectedRoundId.value);
   } catch (error) {
-    showSnackbar('ลบตัวชี้วัดไม่สำเร็จ', 'error');
+    snackbar.message = 'ลบไม่สำเร็จ';
+    snackbar.color = 'error';
+    snackbar.show = true;
   }
-};
-
-// --- Helper ---
-const showSnackbar = (msg, color) => {
-  snackbar.message = msg;
-  snackbar.color = color;
-  snackbar.show = true;
 };
 </script>

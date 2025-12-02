@@ -17,7 +17,7 @@
       </v-col>
     </v-row>
 
-    <div v-if="isLoading" class="text-center py-10">
+    <div v-if="loading" class="text-center py-10">
       <v-progress-circular indeterminate color="primary" size="64"></v-progress-circular>
       <div class="mt-3">กำลังโหลดข้อมูล...</div>
     </div>
@@ -97,11 +97,11 @@
 
       <div class="d-none d-print-flex justify-space-around mt-10 pt-10">
         <div class="text-center">
-          <div class="signature-line mb-2">&nbsp;</div>
+          <div class="border-bottom mb-2" style="width: 200px; margin: 0 auto; border-bottom: 1px dotted #000;">&nbsp;</div>
           <div>ผู้รับการประเมิน</div>
         </div>
         <div class="text-center">
-          <div class="signature-line mb-2">&nbsp;</div>
+          <div class="border-bottom mb-2" style="width: 200px; margin: 0 auto; border-bottom: 1px dotted #000;">&nbsp;</div>
           <div>ประธานกรรมการ</div>
         </div>
       </div>
@@ -118,29 +118,37 @@ const route = useRoute();
 const roundId = route.params.roundId;
 const userId = route.params.userId;
 
-const isLoading = ref(true);
+const loading = ref(true);
 const reportData = ref([]);
 const userData = ref({});
 const roundData = ref({});
 
+// คำนวณคะแนนเต็มรวมทั้งหมด
 const totalMaxScore = computed(() => {
   return reportData.value.reduce((sum, item) => sum + Number(item.max_score || 0), 0);
 });
 
+// คำนวณคะแนนรวมที่ได้ (กรรมการ)
 const totalCommitteeScore = computed(() => {
   return reportData.value.reduce((sum, item) => sum + parseFloat(item.committee_score || 0), 0);
 });
 
+// คำนวณเปอร์เซ็นต์ (%)
 const scorePercentage = computed(() => {
   if (totalMaxScore.value === 0) return 0;
   return ((totalCommitteeScore.value / totalMaxScore.value) * 100).toFixed(2);
 });
 
+// ตัดเกรดจาก % (สมจริงกว่า)
 const resultStatus = computed(() => {
   const percent = parseFloat(scorePercentage.value);
   if (percent >= 80) return 'ดีเยี่ยม';
-  if (percent >= 60) return 'ผ่านเกณฑ์';
+  if (percent >= 60) return 'ผ่านเกณฑ์'; // ปรับเกณฑ์ผ่านเป็น 60% (มาตรฐานทั่วไป)
   return 'ต้องปรับปรุง';
+});
+
+const totalSelfScore = computed(() => {
+  return reportData.value.reduce((sum, item) => sum + Number(item.self_score || 0), 0);
 });
 
 onMounted(async () => {
@@ -149,7 +157,7 @@ onMounted(async () => {
 
 const fetchData = async () => {
   try {
-    isLoading.value = true;
+    loading.value = true;
     const res = await api.get(`/admin/report/${roundId}/${userId}`);
     reportData.value = res.data.data.report;
     userData.value = res.data.data.user;
@@ -157,7 +165,7 @@ const fetchData = async () => {
   } catch (error) {
     console.error("Error fetching report:", error);
   } finally {
-    isLoading.value = false;
+    loading.value = false;
   }
 };
 
@@ -178,9 +186,6 @@ const printReport = () => {
 }
 .report-table th, .report-table td {
   border-bottom: 1px solid #e0e0e0;
-}
-.signature-line {
-    width: 200px; margin: 0 auto; border-bottom: 1px dotted #000;
 }
 @media print {
   body { -webkit-print-color-adjust: exact; }
