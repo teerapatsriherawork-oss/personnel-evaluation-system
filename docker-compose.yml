@@ -42,5 +42,18 @@ services:
       - ./backend:/app
       - /app/node_modules
 
+  # 3. Frontend Service (ส่วนที่เพิ่มเข้ามาใหม่)
+  frontend:
+    build: ./frontend
+    container_name: eval_frontend
+    restart: unless-stopped
+    ports:
+      - "5173:5173" # Map Port 5173 ของเครื่องเรา เข้ากับ 5173 ของ Container
+    volumes:
+      - ./frontend:/app # Mount โค้ดเพื่อให้แก้ไฟล์แล้วเว็บรีเฟรชเอง (Hot Reload)
+      - /app/node_modules # ป้องกัน node_modules ใน container ถูกทับ
+    depends_on:
+      - backend # ให้ Backend รันก่อน Frontend
+
 volumes:
   mysql_data:

@@ -12,7 +12,7 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs",
+  "type": "module",  
   "dependencies": {
     "@mdi/font": "^7.4.47",
     "axios": "^1.13.2",
